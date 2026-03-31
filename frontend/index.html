@@ -1,5 +1,82 @@
 <!DOCTYPE html>
-<html lang="pl">
-<head><meta charset="UTF-8"><title>Weather Dashboard</title></head>
-<body><h1>Weather Dashboard</h1><p>Frontend w budowie...</p></body>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Dashboard</title>
+
+  <!-- Material Symbols + Roboto -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- date-fns adapter for Chart.js time axis -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Top App Bar -->
+  <header class="top-app-bar">
+    <div class="top-app-bar__content">
+      <span class="top-app-bar__title">
+        <span class="material-symbols-rounded">partly_cloudy_day</span>
+        Weather Station
+      </span>
+      <div class="top-app-bar__actions">
+        <span id="connection-status" class="status-chip status-chip--disconnected">
+          <span class="material-symbols-rounded">wifi_off</span>
+          <span>Disconnected</span>
+        </span>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" data-theme-toggle>
+          <span class="material-symbols-rounded">dark_mode</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Weather cards grid -->
+    <div class="weather-grid">
+
+      <!-- Card: Temperature -->
+      <article class="weather-card" id="card-temperature">
+        <div class="weather-card__header">
+          <span class="material-symbols-rounded weather-card__icon weather-card__icon--temp">thermometer</span>
+          <span class="weather-card__label">Temperature</span>
+        </div>
+        <div class="weather-card__current">
+          <span class="weather-card__value" id="temp-value">--</span>
+          <span class="weather-card__unit">°C</span>
+        </div>
+        <p class="weather-card__updated" id="temp-updated">Waiting for data...</p>
+        <div class="weather-card__chart-wrapper">
+          <canvas id="chart-temperature" aria-label="Temperature chart for the last 12 hours" role="img"></canvas>
+        </div>
+      </article>
+
+      <!-- Card: Humidity -->
+      <article class="weather-card" id="card-humidity">
+        <div class="weather-card__header">
+          <span class="material-symbols-rounded weather-card__icon weather-card__icon--humidity">humidity_percentage</span>
+          <span class="weather-card__label">Humidity</span>
+        </div>
+        <div class="weather-card__current">
+          <span class="weather-card__value" id="humidity-value">--</span>
+          <span class="weather-card__unit">%</span>
+        </div>
+        <p class="weather-card__updated" id="humidity-updated">Waiting for data...</p>
+        <div class="weather-card__chart-wrapper">
+          <canvas id="chart-humidity" aria-label="Humidity chart for the last 12 hours" role="img"></canvas>
+        </div>
+      </article>
+
+    </div>
+  </main>
+
+  <script src="app.js" type="module"></script>
+</body>
 </html>
