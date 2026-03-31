@@ -1,0 +1,63 @@
+"""Main FastAPI application — Weather Dashboard."""
+
+import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import delete
+
+from .database import init_db, SessionLocal
+from .models import WeatherReading
+from .mqtt_client import mqtt_listener
+from .routers.weather import router as weather_router
+
+
+async def cleanup_old_readings() -> None:
+    """Delete readings older than 30 days — runs every hour."""
+    while True:
+        await asyncio.sleep(3600)
+        async with SessionLocal() as db:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            await db.execute(
+                delete(WeatherReading).where(WeatherReading.timestamp < cutoff)
+            )
+            await db.commit()
+            print("[Cleanup] Old records removed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Startup/shutdown lifecycle — initialize DB, MQTT and cleanup tasks."""
+    await init_db()
+    mqtt_task = asyncio.create_task(mqtt_listener())
+    cleanup_task = asyncio.create_task(cleanup_old_readings())
+    yield
+    cleanup_task.cancel()
+    mqtt_task.cancel()
+    try:
+        await mqtt_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(weather_router)
+
+# Serve frontend from static files
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
