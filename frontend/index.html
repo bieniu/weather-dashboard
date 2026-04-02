@@ -40,40 +40,8 @@
 
   <main class="main-content">
     <!-- Weather cards grid -->
-    <div class="weather-grid">
-
-      <!-- Card: Temperature -->
-      <article class="weather-card" id="card-temperature">
-        <div class="weather-card__header">
-          <span class="material-symbols-rounded weather-card__icon weather-card__icon--temp">thermometer</span>
-          <span class="weather-card__label">Temperature</span>
-        </div>
-        <div class="weather-card__current">
-          <span class="weather-card__value" id="temp-value">--</span>
-          <span class="weather-card__unit">°C</span>
-        </div>
-        <p class="weather-card__updated" id="temp-updated">Waiting for data...</p>
-        <div class="weather-card__chart-wrapper">
-          <canvas id="chart-temperature" aria-label="Temperature chart for the last 12 hours" role="img"></canvas>
-        </div>
-      </article>
-
-      <!-- Card: Humidity -->
-      <article class="weather-card" id="card-humidity">
-        <div class="weather-card__header">
-          <span class="material-symbols-rounded weather-card__icon weather-card__icon--humidity">humidity_percentage</span>
-          <span class="weather-card__label">Humidity</span>
-        </div>
-        <div class="weather-card__current">
-          <span class="weather-card__value" id="humidity-value">--</span>
-          <span class="weather-card__unit">%</span>
-        </div>
-        <p class="weather-card__updated" id="humidity-updated">Waiting for data...</p>
-        <div class="weather-card__chart-wrapper">
-          <canvas id="chart-humidity" aria-label="Humidity chart for the last 12 hours" role="img"></canvas>
-        </div>
-      </article>
-
+    <div class="weather-grid" id="weather-grid">
+      <!-- Cards generated dynamically from sensor config -->
     </div>
   </main>
 

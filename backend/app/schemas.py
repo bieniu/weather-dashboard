@@ -23,8 +23,4 @@ class WeatherReadingOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CurrentReadings(BaseModel):
-    """Current temperature and humidity readings."""
 
-    temperature: WeatherReadingOut | None
-    humidity: WeatherReadingOut | None

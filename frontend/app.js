@@ -5,8 +5,9 @@ const WS_URL = `${WS_PROTOCOL}//${location.host}/api/weather/ws`;
 const HISTORY_HOURS = 12;
 const MAX_CHART_POINTS = 144; // every 5 min for 12h = 144 points
 
-// ===== CHART STATE =====
+// ===== STATE =====
 const charts = {};
+let sensorsConfig = {};
 
 // ===== HELPERS =====
 function formatTimestamp(isoString) {
@@ -17,6 +18,36 @@ function formatTimestamp(isoString) {
 function formatUpdated(isoString) {
   const d = new Date(isoString);
   return `Updated: ${d.toLocaleTimeString("pl-PL")}`;
+}
+
+/** Strip the "mdi:" prefix and return a Material Symbols icon name. */
+function resolveIcon(iconStr) {
+  return iconStr.replace(/^mdi:/, "");
+}
+
+// ===== CARD GENERATION =====
+function createCard(sensorKey, sensor) {
+  const card = document.createElement("article");
+  card.className = "weather-card";
+  card.id = `card-${sensorKey}`;
+  card.style.setProperty("--sensor-accent", sensor.color);
+
+  card.innerHTML = `
+    <div class="weather-card__header">
+      <span class="material-symbols-rounded weather-card__icon" style="color: ${sensor.color}">${resolveIcon(sensor.icon)}</span>
+      <span class="weather-card__label">${sensor.name}</span>
+    </div>
+    <div class="weather-card__current">
+      <span class="weather-card__value" id="${sensorKey}-value">--</span>
+      <span class="weather-card__unit" id="${sensorKey}-unit"></span>
+    </div>
+    <p class="weather-card__updated" id="${sensorKey}-updated">Waiting for data...</p>
+    <div class="weather-card__chart-wrapper">
+      <canvas id="chart-${sensorKey}" aria-label="${sensor.name} chart for the last ${HISTORY_HOURS} hours" role="img"></canvas>
+    </div>
+  `;
+
+  return card;
 }
 
 // ===== CHART INITIALIZATION =====
@@ -46,12 +77,7 @@ function createChart(canvasId, parameter, color) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => {
-              const val = parameter === "temperature"
-                ? ctx.parsed.y.toFixed(1)
-                : Math.round(ctx.parsed.y).toString();
-              return ` ${val} ${parameter === "temperature" ? "°C" : "%"}`;
-            },
+            label: (ctx) => ` ${ctx.parsed.y.toFixed(1)}`,
             title: (items) => formatTimestamp(items[0].raw.x),
           }
         }
@@ -76,12 +102,8 @@ function createChart(canvasId, parameter, color) {
             font: { family: "Roboto Mono", size: 11 },
             color: getComputedStyle(document.documentElement)
                      .getPropertyValue("--md-sys-color-on-surface-variant").trim(),
-            callback: function(value, index, ticks) {
-              if (parameter === "temperature") {
-                return Number(value).toFixed(1);
-              } else {
-                return Math.round(Number(value)).toString();
-              }
+            callback: function(value) {
+              return Number(value).toFixed(1);
             },
           }
         }
@@ -92,14 +114,12 @@ function createChart(canvasId, parameter, color) {
 
 // ===== UPDATE CARD =====
 function updateCard(parameter, value, unit, timestamp) {
-  const prefix = parameter === "temperature" ? "temp" : "humidity";
-  const valueEl = document.getElementById(`${prefix}-value`);
-  const updatedEl = document.getElementById(`${prefix}-updated`);
+  const valueEl = document.getElementById(`${parameter}-value`);
+  const unitEl = document.getElementById(`${parameter}-unit`);
+  const updatedEl = document.getElementById(`${parameter}-updated`);
 
-  const formatted = parameter === "temperature"
-    ? Number(value).toFixed(1)
-    : Math.round(Number(value)).toString();
-  if (valueEl) valueEl.textContent = formatted;
+  if (valueEl) valueEl.textContent = Number(value).toFixed(1);
+  if (unitEl) unitEl.textContent = unit;
   if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
 }
 
@@ -202,29 +222,33 @@ function initThemeToggle() {
   });
 }
 
+// ===== LOAD SENSOR CONFIG =====
+async function loadSensors() {
+  const res = await fetch(`${API_BASE}/sensors`);
+  if (!res.ok) throw new Error(`Failed to load sensors: HTTP ${res.status}`);
+  return res.json();
+}
+
 // ===== APP INITIALIZATION =====
 async function init() {
   initThemeToggle();
 
-  // Create charts
-  charts["temperature"] = createChart(
-    "chart-temperature",
-    "temperature",
-    getComputedStyle(document.documentElement)
-      .getPropertyValue("--md-sys-color-temp-accent").trim()
-  );
-  charts["humidity"] = createChart(
-    "chart-humidity",
-    "humidity",
-    getComputedStyle(document.documentElement)
-      .getPropertyValue("--md-sys-color-humidity-accent").trim()
-  );
+  // Load sensor configuration from backend
+  sensorsConfig = await loadSensors();
+  const grid = document.getElementById("weather-grid");
 
-  // Load historical data
-  await Promise.all([
-    loadHistory("temperature"),
-    loadHistory("humidity"),
-  ]);
+  for (const [key, sensor] of Object.entries(sensorsConfig)) {
+    // Generate card DOM
+    grid.appendChild(createCard(key, sensor));
+
+    // Create chart with sensor accent color
+    charts[key] = createChart(`chart-${key}`, key, sensor.color);
+  }
+
+  // Load historical data for all sensors
+  await Promise.all(
+    Object.keys(sensorsConfig).map(key => loadHistory(key))
+  );
 
   // Connect WebSocket
   connectWebSocket();

@@ -12,9 +12,6 @@
   --md-sys-color-background:        #f5fafb;
   --md-sys-color-error:             #ba1a1a;
 
-  --md-sys-color-temp-accent:       #c62828;
-  --md-sys-color-humidity-accent:   #1565c0;
-
   --md-elevation-1: 0 1px 2px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.08);
   --md-elevation-2: 0 2px 4px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.10);
   --md-elevation-3: 0 4px 8px rgba(0,0,0,.10), 0 8px 24px rgba(0,0,0,.12);
@@ -34,9 +31,6 @@
   --md-sys-color-outline-variant:   #3f4849;
   --md-sys-color-background:        #0e1415;
   --md-sys-color-error:             #ffb4ab;
-
-  --md-sys-color-temp-accent:       #ef9a9a;
-  --md-sys-color-humidity-accent:   #90caf9;
 
   --md-elevation-1: 0 1px 2px rgba(0,0,0,.3), 0 2px 6px rgba(0,0,0,.25);
   --md-elevation-2: 0 2px 4px rgba(0,0,0,.35), 0 4px 12px rgba(0,0,0,.30);
@@ -162,8 +156,6 @@ body {
 .weather-card__icon {
   font-size: 1.5rem;
 }
-.weather-card__icon--temp     { color: var(--md-sys-color-temp-accent); }
-.weather-card__icon--humidity { color: var(--md-sys-color-humidity-accent); }
 
 .weather-card__label {
   font-size: 0.875rem;

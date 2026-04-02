@@ -13,8 +13,7 @@ from .database import SessionLocal
 from .models import WeatherReading
 
 TOPIC_PARAMETER_MAP: dict[str, str] = {
-    "weather-dashboard/temperature": "temperature",
-    "weather-dashboard/humidity": "humidity",
+    f"{settings.topic_prefix}/{sensor}": sensor for sensor in settings.sensors
 }
 
 
@@ -60,7 +59,7 @@ async def mqtt_listener() -> None:
                 username=settings.mqtt_user,
                 password=settings.mqtt_password,
             ) as client:
-                await client.subscribe("weather-dashboard/#")
+                await client.subscribe(f"{settings.topic_prefix}/#")
                 print(f"[MQTT] Connected to {settings.mqtt_broker}:{settings.mqtt_port}")
 
                 async for message in client.messages:

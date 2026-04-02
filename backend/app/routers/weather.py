@@ -5,19 +5,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from datetime import datetime, timezone, timedelta
 
+from ..config import settings
 from ..database import get_db
 from ..models import WeatherReading
-from ..schemas import WeatherReadingOut, CurrentReadings
+from ..schemas import WeatherReadingOut
 from ..mqtt_client import manager
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
 
-@router.get("/current", response_model=CurrentReadings)
-async def get_current(db: AsyncSession = Depends(get_db)) -> CurrentReadings:
-    """Return the latest temperature and humidity readings."""
+@router.get("/sensors")
+async def get_sensors() -> dict:
+    """Return sensor configuration from config.yaml."""
+    return {
+        key: sensor.model_dump() for key, sensor in settings.sensors.items()
+    }
+
+
+@router.get("/current", response_model=dict[str, WeatherReadingOut | None])
+async def get_current(db: AsyncSession = Depends(get_db)) -> dict:
+    """Return the latest reading for each configured sensor."""
     result: dict = {}
-    for param in ("temperature", "humidity"):
+    for param in settings.sensors:
         stmt = (
             select(WeatherReading)
             .where(WeatherReading.parameter == param)
@@ -35,11 +44,8 @@ async def get_history(
     hours: int = 12,
     db: AsyncSession = Depends(get_db),
 ) -> list[WeatherReadingOut]:
-    """Return reading history for the last `hours` hours (default 12).
-
-    Parameter: 'temperature' or 'humidity'.
-    """
-    if parameter not in ("temperature", "humidity"):
+    """Return reading history for the last `hours` hours (default 12)."""
+    if parameter not in settings.sensors:
         raise HTTPException(status_code=400, detail="Invalid parameter")
 
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
