@@ -17,6 +17,7 @@ ENV MQTT_BROKER=""
 ENV MQTT_PORT="1883"
 ENV MQTT_USER=""
 ENV MQTT_PASSWORD=""
+ENV DATABASE_URL="sqlite+aiosqlite:////data/weather.db"
 
 EXPOSE 8000
 
