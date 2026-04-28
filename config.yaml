@@ -11,13 +11,13 @@ sensors:
     color: "#2196F3"
   pressure:
     name: Pressure
-    icon: mdi:gauge
+    icon: mdi:speed
     color: "#009688"
   pm10:
     name: PM10
-    icon: mdi:molecule
+    icon: mdi:air
     color: "#607D8B"
   pm25:
     name: PM25
-    icon: mdi:molecule
+    icon: mdi:air
     color: "#607D8B"
