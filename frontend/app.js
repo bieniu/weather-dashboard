@@ -51,7 +51,7 @@ function createCard(sensorKey, sensor) {
 }
 
 // ===== CHART INITIALIZATION =====
-function createChart(canvasId, parameter, color) {
+function createChart(canvasId, parameter, color, decimals) {
   const ctx = document.getElementById(canvasId).getContext("2d");
 
   return new Chart(ctx, {
@@ -77,7 +77,7 @@ function createChart(canvasId, parameter, color) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => ` ${ctx.parsed.y.toFixed(1)}`,
+            label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)}`,
             title: (items) => formatTimestamp(items[0].raw.x),
           }
         }
@@ -103,9 +103,12 @@ function createChart(canvasId, parameter, color) {
             color: getComputedStyle(document.documentElement)
                      .getPropertyValue("--md-sys-color-on-surface-variant").trim(),
             callback: function(value) {
-              return Number(value).toFixed(1);
+              return Number(value).toFixed(decimals);
             },
-          }
+          },
+          afterFit(scale) {
+            scale.width = 52;
+          },
         }
       }
     }
@@ -118,7 +121,8 @@ function updateCard(parameter, value, unit, timestamp) {
   const unitEl = document.getElementById(`${parameter}-unit`);
   const updatedEl = document.getElementById(`${parameter}-updated`);
 
-  if (valueEl) valueEl.textContent = Number(value).toFixed(1);
+  const decimals = sensorsConfig[parameter]?.round ?? 1;
+  if (valueEl) valueEl.textContent = Number(value).toFixed(decimals);
   if (unitEl) unitEl.textContent = unit;
   if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
 }
@@ -242,7 +246,7 @@ async function init() {
     grid.appendChild(createCard(key, sensor));
 
     // Create chart with sensor accent color
-    charts[key] = createChart(`chart-${key}`, key, sensor.color);
+    charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1);
   }
 
   // Load historical data for all sensors
