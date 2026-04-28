@@ -2,22 +2,26 @@ topic_prefix: weather-dashboard
 
 sensors:
   temperature:
-    name: Temperature
+    name: Temperatura
     icon: mdi:thermometer
     color: "#FF6F22"
   humidity:
-    name: Humidity
+    name: Wilgotność
     icon: mdi:humidity_percentage
     color: "#2196F3"
   pressure:
-    name: Pressure
+    name: Ciśnienie
     icon: mdi:speed
     color: "#009688"
+  pm1:
+    name: Pył zawieszony PM1
+    icon: mdi:air
+    color: "#607D8B"
   pm10:
-    name: PM10
+    name: Pył zawieszony PM10
     icon: mdi:air
     color: "#607D8B"
   pm25:
-    name: PM25
+    name: Pył zawieszony PM25
     icon: mdi:air
     color: "#607D8B"

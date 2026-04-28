@@ -17,7 +17,7 @@ function formatTimestamp(isoString) {
 
 function formatUpdated(isoString) {
   const d = new Date(isoString);
-  return `Updated: ${d.toLocaleTimeString("pl-PL")}`;
+  return `Zaktualizowano: ${d.toLocaleTimeString("pl-PL")}`;
 }
 
 /** Strip the "mdi:" prefix and return a Material Symbols icon name. */
@@ -41,7 +41,7 @@ function createCard(sensorKey, sensor) {
       <span class="weather-card__value" id="${sensorKey}-value">--</span>
       <span class="weather-card__unit" id="${sensorKey}-unit"></span>
     </div>
-    <p class="weather-card__updated" id="${sensorKey}-updated">Waiting for data...</p>
+    <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
     <div class="weather-card__chart-wrapper">
       <canvas id="chart-${sensorKey}" aria-label="${sensor.name} chart for the last ${HISTORY_HOURS} hours" role="img"></canvas>
     </div>
@@ -85,7 +85,7 @@ function createChart(canvasId, parameter, color) {
       scales: {
         x: {
           type: "time",
-          time: { unit: "hour", tooltipFormat: "HH:mm" },
+          time: { unit: "hour", tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } },
           grid: { color: getComputedStyle(document.documentElement)
                            .getPropertyValue("--md-sys-color-outline-variant").trim() },
           ticks: {
@@ -172,7 +172,7 @@ function connectWebSocket() {
   ws.onopen = () => {
     console.log("[WS] Connected");
     statusEl.className = "status-chip status-chip--connected";
-    statusEl.innerHTML = `<span class="material-symbols-rounded">wifi</span><span>Connected</span>`;
+    statusEl.innerHTML = `<span class="material-symbols-rounded">wifi</span><span>Połączono</span>`;
   };
 
   ws.onmessage = (event) => {
@@ -188,7 +188,7 @@ function connectWebSocket() {
   ws.onclose = () => {
     console.warn("[WS] Disconnected. Retrying in 5s...");
     statusEl.className = "status-chip status-chip--disconnected";
-    statusEl.innerHTML = `<span class="material-symbols-rounded">wifi_off</span><span>Disconnected</span>`;
+    statusEl.innerHTML = `<span class="material-symbols-rounded">wifi_off</span><span>Rozłączono</span>`;
     setTimeout(connectWebSocket, 5000);
   };
 
