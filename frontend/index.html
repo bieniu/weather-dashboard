@@ -5,45 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stacja pogodowa</title>
 
-  <!-- Material Symbols + Roboto -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <!-- date-fns adapter for Chart.js time axis -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Top App Bar -->
-  <header class="top-app-bar">
-    <div class="top-app-bar__content">
-      <span class="top-app-bar__title">
+  <header class="header">
+    <div class="header__inner">
+      <span class="header__title">
         <span class="material-symbols-rounded">partly_cloudy_day</span>
         Stacja pogodowa
       </span>
-      <div class="top-app-bar__actions">
-        <span id="connection-status" class="status-chip status-chip--disconnected">
-          <span class="material-symbols-rounded">wifi_off</span>
-          <span>Disconnected</span>
+      <div class="header__actions">
+        <span id="connection-status" class="status status--disconnected" role="status">
+          <span class="status__dot"></span>
+          <span class="status__label">Rozłączono</span>
         </span>
-        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme" data-theme-toggle>
+        <button class="theme-btn" id="theme-toggle" aria-label="Przełącz motyw">
           <span class="material-symbols-rounded">dark_mode</span>
         </button>
       </div>
     </div>
   </header>
 
-  <main class="main-content">
-    <!-- Weather cards grid -->
-    <div class="weather-grid" id="weather-grid">
-      <!-- Cards generated dynamically from sensor config -->
-    </div>
+  <main class="main">
+    <div class="grid" id="weather-grid"></div>
   </main>
 
   <script src="app.js" type="module"></script>
