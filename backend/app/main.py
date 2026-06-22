@@ -8,6 +8,9 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 from sqlalchemy import delete
 
 from .config import settings
@@ -49,6 +52,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         pass
 
 
+CSP_HEADER = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net; "
+    "style-src 'self' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self' ws: wss:; "
+    "frame-ancestors 'none';"
+)
+
+
+class CSPMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["Content-Security-Policy"] = CSP_HEADER
+        return response
+
+
 app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
 
 app.add_middleware(
@@ -57,6 +78,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CSPMiddleware)
 
 app.include_router(weather_router)
 
