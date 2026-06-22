@@ -14,7 +14,7 @@ config.yaml      Sensor definitions (temperature, humidity, pressure, pm1/10/25)
 ## Setup & run
 
 ```bash
-pip install -r backend/requirements.txt
+uv sync --frozen   # run from backend/ (requires uv installed)
 # Requires .env in project root with MQTT_BROKER, MQTT_USER, MQTT_PASSWORD
 uvicorn app.main:app --host 0.0.0.0 --port 8000   # run from backend/
 # Or from root:

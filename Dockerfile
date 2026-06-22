@@ -1,8 +1,11 @@
-FROM python:3.12-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
 
+ENV UV_SYSTEM_PYTHON=1
 WORKDIR /app
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --no-compile -r requirements.txt
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --no-dev --frozen --no-install-project
+COPY backend/ ./backend/
+RUN uv sync --no-dev --frozen
 
 
 FROM python:3.12-alpine
