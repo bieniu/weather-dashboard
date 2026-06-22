@@ -59,7 +59,7 @@ function createCard(sensorKey, sensor, index) {
   return card;
 }
 
-function createChart(canvasId, parameter, color, decimals) {
+function createChart(canvasId, parameter, color, decimals, unit) {
   const ctx = document.getElementById(canvasId).getContext("2d");
 
   return new Chart(ctx, {
@@ -85,7 +85,7 @@ function createChart(canvasId, parameter, color, decimals) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)}`,
+            label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)} ${unit}`,
             title: (items) => formatTimestamp(items[0].raw.x),
           }
         }
@@ -243,7 +243,7 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1);
+    charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     idx++;
   }
 

@@ -23,6 +23,7 @@ class SensorConfig(BaseModel):
     icon: str
     color: str
     round: int = 1
+    unit: str = ""
 
 
 class Settings(BaseSettings):

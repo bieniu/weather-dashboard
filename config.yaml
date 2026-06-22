@@ -6,28 +6,34 @@ sensors:
     icon: mdi:thermometer
     color: "#FF6F22"
     round: 1
+    unit: °C
   humidity:
     name: Wilgotność
     icon: mdi:humidity_percentage
     color: "#2196F3"
     round: 0
+    unit: "%"
   pressure:
     name: Ciśnienie
     icon: mdi:speed
     color: "#009688"
     round: 0
+    unit: hPa
   pm1:
     name: Pył zawieszony PM1
     icon: mdi:air
     color: "#607D8B"
     round: 0
+    unit: µg/m³
   pm10:
     name: Pył zawieszony PM10
     icon: mdi:air
     color: "#607D8B"
     round: 0
+    unit: µg/m³
   pm25:
     name: Pył zawieszony PM25
     icon: mdi:air
     color: "#607D8B"
     round: 0
+    unit: µg/m³
