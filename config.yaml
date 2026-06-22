@@ -12,6 +12,12 @@ sensors:
     color: "#FF6F22"
     round: 1
     unit: °C
+  apparent_temperature:
+    name: Temperatura odczuwalna
+    icon: mdi:thermometer
+    color: "#FF6F22"
+    round: 1
+    unit: °C
   humidity:
     name: Wilgotność
     icon: mdi:humidity_percentage
