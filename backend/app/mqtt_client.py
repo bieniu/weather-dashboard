@@ -1,7 +1,5 @@
 """MQTT client — subscribe to weather topics, save to DB and broadcast via WebSocket."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging

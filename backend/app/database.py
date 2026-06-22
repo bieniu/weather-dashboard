@@ -1,7 +1,5 @@
 """Database configuration — async SQLAlchemy with SQLite."""
 
-from __future__ import annotations
-
 import os
 from typing import TYPE_CHECKING
 
