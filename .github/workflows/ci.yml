@@ -29,13 +29,13 @@ jobs:
         run: uv sync --group dev
 
       - name: Lint
-        run: uv run ruff check .
+        run: uv run ruff check backend
 
       - name: Check format
-        run: uv run ruff format --check .
+        run: uv run ruff format --check backend
 
       - name: Check types
-        run: uv run ty check gios
+        run: uv run ty check backend
 
       - name: Run prek
         run: |
