@@ -59,6 +59,7 @@ CSP_HEADER = (
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data:; "
     "connect-src 'self' ws: wss:; "
+    "worker-src 'self'; "
     "frame-ancestors 'none';"
 )
 
