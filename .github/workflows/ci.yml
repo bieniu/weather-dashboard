@@ -1,0 +1,50 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          enable-cache: true
+          activate-environment: true
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Check format
+        run: uv run ruff format --check .
+
+      - name: Check types
+        run: uv run ty check gios
+
+      - name: Run prek
+        run: |
+          uv run prek run \
+            end-of-file-fixer \
+            trailing-whitespace \
+            check-added-large-files \
+            check-yaml \
+            check-json \
+            check-toml \
+            mixed-line-ending \
+            --all-files
