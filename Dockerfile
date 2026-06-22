@@ -1,6 +1,5 @@
 FROM ghcr.io/astral-sh/uv:python3.14-alpine AS builder
 
-ENV UV_SYSTEM_PYTHON=1
 WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project
@@ -12,8 +11,7 @@ FROM python:3.14-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1
 
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
+COPY --from=builder /app/.venv /app/.venv
 
 WORKDIR /app
 COPY backend/ ./backend/
@@ -28,7 +26,8 @@ VOLUME ["/data"]
 WORKDIR /app/backend
 USER appuser
 
-ENV MQTT_BROKER="" \
+ENV PATH="/app/.venv/bin:$PATH" \
+    MQTT_BROKER="" \
     MQTT_PORT="1883" \
     MQTT_USER="" \
     DOMAIN="localhost" \
