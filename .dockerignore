@@ -1,5 +1,5 @@
 .env
-.git/
+# .git/  # kept so BuildKit can capture commit labels
 __pycache__/
 *.py[codz]
 *.egg-info/

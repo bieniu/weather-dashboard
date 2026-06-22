@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     mqtt_broker: str
     mqtt_port: int = 1883
     mqtt_user: str
-    mqtt_password: str
+    mqtt_password: str = ""
     domain: str = "localhost"
     port: int = 8000
     scheme: str = "http"

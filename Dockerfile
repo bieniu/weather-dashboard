@@ -22,7 +22,7 @@ USER appuser
 ENV MQTT_BROKER=""
 ENV MQTT_PORT="1883"
 ENV MQTT_USER=""
-ENV MQTT_PASSWORD=""
+# MQTT_PASSWORD must be provided at runtime (via -e / env_file) - not set here to avoid baking secrets into the image
 ENV DOMAIN="localhost"
 ENV PORT="8000"
 ENV SCHEME="http"
