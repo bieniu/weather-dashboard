@@ -9,7 +9,7 @@ COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY config.yaml ./config.yaml
 
-RUN adduser --system --no-create-home appuser
+RUN addgroup --system appuser && adduser --system --no-create-home --ingroup appuser appuser
 
 WORKDIR /app/backend
 
