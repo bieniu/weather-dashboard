@@ -37,10 +37,20 @@ class Settings(BaseSettings):
     mqtt_port: int = 1883
     mqtt_user: str
     mqtt_password: str
+    domain: str = "localhost"
+    port: int = 8000
+    scheme: str = "http"
     topic_prefix: str = _yaml_config["topic_prefix"]
     sensors: dict[str, SensorConfig] = {
         k: SensorConfig(**v) for k, v in _yaml_config["sensors"].items()
     }
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [
+            f"{self.scheme}://{self.domain}:{self.port}",
+            "http://127.0.0.1:8000",
+        ]
 
 
 settings = Settings()

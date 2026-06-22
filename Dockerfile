@@ -9,14 +9,23 @@ COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 COPY config.yaml ./config.yaml
 
+RUN adduser --system --no-create-home appuser
+
 WORKDIR /app/backend
 
 VOLUME ["/data"]
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 ENV MQTT_BROKER=""
 ENV MQTT_PORT="1883"
 ENV MQTT_USER=""
 ENV MQTT_PASSWORD=""
+ENV DOMAIN="localhost"
+ENV PORT="8000"
+ENV SCHEME="http"
 ENV DATABASE_URL="sqlite+aiosqlite:////data/weather.db"
 
 EXPOSE 8000

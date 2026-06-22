@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete
 
+from .config import settings
 from .database import init_db, SessionLocal
 from .models import WeatherReading
 from .mqtt_client import mqtt_listener
@@ -52,7 +53,7 @@ app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
