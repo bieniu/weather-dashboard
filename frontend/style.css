@@ -280,7 +280,7 @@ body {
 }
 
 /* =============================================
-   Condition card
+   Condition card — full-width first row
    ============================================= */
 .weather-card__icon--condition {
   font-size: 3rem;
@@ -292,6 +292,10 @@ body {
   font-weight: 400;
   font-variant-numeric: normal;
   letter-spacing: normal;
+}
+
+#card-condition {
+  grid-column: 1 / -1;
 }
 
 /* =============================================
