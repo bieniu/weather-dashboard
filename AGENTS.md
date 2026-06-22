@@ -4,7 +4,7 @@
 ## Structure
 
 ```
-backend/         FastAPI async app (Python 3.12, SQLAlchemy + aiosqlite, aiomqtt)
+backend/         FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomqtt)
   app/main.py    Entrypoint — `uvicorn app.main:app`
   app/config.py  Reads config.yaml + .env
 frontend/        Vanilla JS + Chart.js (CDN), no build step
