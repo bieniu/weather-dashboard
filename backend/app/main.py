@@ -67,6 +67,13 @@ CSP_HEADER = (
 )
 
 
+class CloudflareIPMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        cf_ip = request.headers.get("Cf-Connecting-IP")
+        request.state.real_ip = cf_ip or (request.client.host if request.client else "unknown")
+        return await call_next(request)
+
+
 class CSPMiddleware(BaseHTTPMiddleware):
     """Middleware that adds Content-Security-Policy header to all responses."""
 
@@ -89,6 +96,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CloudflareIPMiddleware)
 app.add_middleware(CSPMiddleware)
 
 app.include_router(weather_router)
