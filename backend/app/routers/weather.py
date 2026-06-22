@@ -11,7 +11,9 @@ from sqlalchemy import desc, select
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,  # noqa: TC002  # needed at runtime for get_type_hints
+)
 
 from app.config import settings
 from app.database import get_db
@@ -49,8 +51,8 @@ async def get_current(
 @router.get("/history/{parameter}", response_model=list[WeatherReadingOut])
 async def get_history(
     parameter: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
     hours: int = 12,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,  # ty: ignore
 ) -> Sequence[WeatherReading]:
     """Return reading history for the last `hours` hours (default 12)."""
     if parameter not in settings.sensors:

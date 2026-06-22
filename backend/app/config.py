@@ -57,4 +57,4 @@ class Settings(BaseSettings):
         ]
 
 
-settings = Settings()  # ty: ignore
+settings = Settings()  # ty: ignore[missing-argument]
