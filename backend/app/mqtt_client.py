@@ -110,6 +110,10 @@ async def mqtt_listener() -> None:
                         await db.commit()
                         await db.refresh(reading)
 
+                        # SQLite strips timezone info on read — re-attach UTC
+                        if reading.timestamp.tzinfo is None:
+                            reading.timestamp = reading.timestamp.replace(tzinfo=timezone.utc)
+
                     # Broadcast to frontend via WebSocket
                     if is_condition:
                         await manager.broadcast({
