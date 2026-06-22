@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def _load_config_yaml() -> dict:
-    with open(ROOT_DIR / "config.yaml") as f:
+    with (ROOT_DIR / "config.yaml").open() as f:
         return yaml.safe_load(f)
 
 
@@ -19,6 +19,7 @@ _yaml_config = _load_config_yaml()
 
 class SensorConfig(BaseModel):
     """Configuration for a single sensor."""
+
     name: str
     icon: str
     color: str
@@ -29,8 +30,10 @@ class SensorConfig(BaseModel):
 
 class Settings(BaseSettings):
     """Application settings loaded from the .env file."""
+
     model_config = SettingsConfigDict(
-        env_file=str(ROOT_DIR / ".env"), env_file_encoding="utf-8"
+        env_file=str(ROOT_DIR / ".env"),
+        env_file_encoding="utf-8",
     )
 
     mqtt_broker: str
@@ -47,10 +50,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
+        """Return allowed CORS origins."""
         return [
             f"{self.scheme}://{self.domain}:{self.port}",
             "http://127.0.0.1:8000",
         ]
 
 
-settings = Settings()
+settings = Settings()  # ty: ignore

@@ -1,15 +1,23 @@
 """REST + WebSocket router for weather data."""
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from datetime import datetime, timezone, timedelta
+from __future__ import annotations
 
-from ..config import settings
-from ..database import get_db
-from ..models import WeatherReading
-from ..schemas import WeatherReadingOut
-from ..mqtt_client import manager
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from sqlalchemy import desc, select
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database import get_db
+from app.models import WeatherReading
+from app.mqtt_client import manager
+from app.schemas import WeatherReadingOut
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
@@ -17,13 +25,13 @@ router = APIRouter(prefix="/api/weather", tags=["weather"])
 @router.get("/sensors")
 async def get_sensors() -> dict:
     """Return sensor configuration from config.yaml."""
-    return {
-        key: sensor.model_dump() for key, sensor in settings.sensors.items()
-    }
+    return {key: sensor.model_dump() for key, sensor in settings.sensors.items()}
 
 
 @router.get("/current", response_model=dict[str, WeatherReadingOut | None])
-async def get_current(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_current(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
     """Return the latest reading for each configured sensor."""
     result: dict = {}
     for param in settings.sensors:
@@ -42,13 +50,13 @@ async def get_current(db: AsyncSession = Depends(get_db)) -> dict:
 async def get_history(
     parameter: str,
     hours: int = 12,
-    db: AsyncSession = Depends(get_db),
-) -> list[WeatherReadingOut]:
+    db: Annotated[AsyncSession, Depends(get_db)] = None,  # ty: ignore
+) -> Sequence[WeatherReading]:
     """Return reading history for the last `hours` hours (default 12)."""
     if parameter not in settings.sensors:
         raise HTTPException(status_code=400, detail="Invalid parameter")
 
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(UTC) - timedelta(hours=hours)
     stmt = (
         select(WeatherReading)
         .where(
@@ -57,8 +65,7 @@ async def get_history(
         )
         .order_by(WeatherReading.timestamp)
     )
-    rows = (await db.execute(stmt)).scalars().all()
-    return rows
+    return (await db.execute(stmt)).scalars().all()
 
 
 @router.websocket("/ws")

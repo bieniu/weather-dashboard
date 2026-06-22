@@ -27,5 +27,9 @@ docker compose up
 - MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
 - WebSocket at `/api/weather/ws` pushes live readings; REST at `/api/weather/sensors` and `/api/weather/history/{parameter}?hours=N`
 - DB cleanup: deletes readings older than 30d, runs every hour in a background asyncio task
-- No tests, no linter/formatter/typechecker config — none present in repo
+- Linting: `ruff check backend` (run from root)
+- Formatting: `ruff format backend` (run from root). Ruff selects `ALL` rules with minimal ignores (D203, D213) and `D104` ignored in `__init__.py` via per-file-ignores.
+- Type checking: `ty check backend` (run from root). configured in `backend/pyproject.toml`.
+- Both ruff and ty are dev dependencies — install via `uv sync --frozen` from `backend/`.
+- Pre-commit equivalent: `prek` (config in `prek.toml`). Run `prek run` to run all hooks.
 - `.env` is gitignored; example vars in docker-compose.yml: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`

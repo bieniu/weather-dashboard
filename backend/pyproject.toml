@@ -14,3 +14,33 @@ dependencies = [
     "uvicorn==0.49.0",
     "websockets==16.0",
 ]
+
+[dependency-groups]
+dev = [
+  "prek==0.4.5",
+  "ruff==0.15.18",
+  "ty==0.0.51",
+]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",
+    "D213",
+    "COM812",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["D104"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.check]
+typeCheckingMode = "strict"
