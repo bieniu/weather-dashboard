@@ -280,6 +280,21 @@ body {
 }
 
 /* =============================================
+   Condition card
+   ============================================= */
+.weather-card__icon--condition {
+  font-size: 3rem;
+}
+
+.weather-card__value--condition {
+  font-family: var(--font-body);
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-weight: 400;
+  font-variant-numeric: normal;
+  letter-spacing: normal;
+}
+
+/* =============================================
    Responsive
    ============================================= */
 @media (max-width: 640px) {

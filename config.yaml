@@ -1,6 +1,11 @@
 topic_prefix: weather-dashboard
 
 sensors:
+  condition:
+    type: condition
+    name: Obecne warunki
+    icon: mdi:partly_cloudy_day
+    color: "#FFB300"
   temperature:
     name: Temperatura
     icon: mdi:thermometer

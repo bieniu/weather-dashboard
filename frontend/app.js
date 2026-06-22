@@ -4,6 +4,24 @@ const WS_URL = `${WS_PROTOCOL}//${location.host}/api/weather/ws`;
 const HISTORY_HOURS = 12;
 const MAX_CHART_POINTS = 144;
 
+const WEATHER_ICON_MAP = {
+  "clear-night": "clear_night",
+  "cloudy": "cloud",
+  "exceptional": "warning",
+  "fog": "foggy",
+  "hail": "weather_hail",
+  "lightning": "thunderstorm",
+  "lightning-rainy": "thunderstorm_and_rain",
+  "partlycloudy": "partly_cloudy_day",
+  "pouring": "rainy_heavy",
+  "rainy": "rainy",
+  "snowy": "snowy",
+  "snowy-rainy": "weather_snowy_rainy",
+  "sunny": "sunny",
+  "windy": "air",
+  "windy-variant": "airwave",
+};
+
 const charts = {};
 let sensorsConfig = {};
 
@@ -41,20 +59,33 @@ function createCard(sensorKey, sensor, index) {
   card.style.setProperty("--card-index", index);
   card.style.setProperty("--sensor-color", sensor.color);
 
-  card.innerHTML = `
-    <div class="weather-card__header">
-      <span class="weather-card__icon material-symbols-rounded">${resolveIcon(sensor.icon)}</span>
-      <span class="weather-card__label">${sensor.name}</span>
-    </div>
-    <div class="weather-card__value-wrap">
-      <span class="weather-card__value" id="${sensorKey}-value">--</span>
-      <span class="weather-card__unit" id="${sensorKey}-unit"></span>
-    </div>
-    <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
-    <div class="weather-card__chart">
-      <canvas id="chart-${sensorKey}" aria-label="${sensor.name} — wykres z ostatnich ${HISTORY_HOURS} godzin" role="img"></canvas>
-    </div>
-  `;
+  if (sensor.type === "condition") {
+    card.innerHTML = `
+      <div class="weather-card__header">
+        <span class="weather-card__icon weather-card__icon--condition material-symbols-rounded" id="${sensorKey}-icon">${resolveIcon(sensor.icon)}</span>
+        <span class="weather-card__label">${sensor.name}</span>
+      </div>
+      <div class="weather-card__value-wrap">
+        <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
+      </div>
+      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
+    `;
+  } else {
+    card.innerHTML = `
+      <div class="weather-card__header">
+        <span class="weather-card__icon material-symbols-rounded">${resolveIcon(sensor.icon)}</span>
+        <span class="weather-card__label">${sensor.name}</span>
+      </div>
+      <div class="weather-card__value-wrap">
+        <span class="weather-card__value" id="${sensorKey}-value">--</span>
+        <span class="weather-card__unit" id="${sensorKey}-unit"></span>
+      </div>
+      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
+      <div class="weather-card__chart">
+        <canvas id="chart-${sensorKey}" aria-label="${sensor.name} — wykres z ostatnich ${HISTORY_HOURS} godzin" role="img"></canvas>
+      </div>
+    `;
+  }
 
   return card;
 }
@@ -131,18 +162,35 @@ function updateChartTheme() {
   });
 }
 
-function updateCard(parameter, value, unit, timestamp) {
-  const valueEl = document.getElementById(`${parameter}-value`);
-  const unitEl = document.getElementById(`${parameter}-unit`);
-  const updatedEl = document.getElementById(`${parameter}-updated`);
+function updateCard(parameter, value, unit, timestamp, icon) {
+  const sensor = sensorsConfig[parameter];
+  if (!sensor) return;
 
-  const decimals = sensorsConfig[parameter]?.round ?? 1;
-  if (valueEl) {
-    valueEl.textContent = Number(value).toFixed(decimals);
-    flashValue(valueEl, sensorsConfig[parameter]?.color ?? "#64748B");
+  if (sensor.type === "condition") {
+    const valueEl = document.getElementById(`${parameter}-value`);
+    const updatedEl = document.getElementById(`${parameter}-updated`);
+    const iconEl = document.getElementById(`${parameter}-icon`);
+    if (valueEl) {
+      valueEl.textContent = value ?? "—";
+      flashValue(valueEl, sensor.color);
+    }
+    if (iconEl && icon) {
+      iconEl.textContent = WEATHER_ICON_MAP[icon] || icon;
+    }
+    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
+  } else {
+    const valueEl = document.getElementById(`${parameter}-value`);
+    const unitEl = document.getElementById(`${parameter}-unit`);
+    const updatedEl = document.getElementById(`${parameter}-updated`);
+
+    const decimals = sensor.round ?? 1;
+    if (valueEl) {
+      valueEl.textContent = Number(value).toFixed(decimals);
+      flashValue(valueEl, sensor.color);
+    }
+    if (unitEl) unitEl.textContent = unit;
+    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
   }
-  if (unitEl) unitEl.textContent = unit;
-  if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
 }
 
 function appendChartPoint(parameter, value, timestamp) {
@@ -160,6 +208,16 @@ async function loadHistory(parameter) {
     const res = await fetch(`${API_BASE}/history/${parameter}?hours=${HISTORY_HOURS}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
+
+    const sensor = sensorsConfig[parameter];
+    if (sensor?.type === "condition") {
+      if (history.length > 0) {
+        const last = history[history.length - 1];
+        updateCard(parameter, last.value_str, null, last.timestamp, last.icon);
+      }
+      return;
+    }
+
     const chart = charts[parameter];
     if (!chart) return;
     chart.data.datasets[0].data = history.map(r => ({
@@ -188,7 +246,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      updateCard(data.parameter, data.value, data.unit, data.timestamp);
+      updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
       appendChartPoint(data.parameter, data.value, data.timestamp);
     } catch (e) {
       console.warn("[WS] Message parse error:", e);
@@ -243,7 +301,9 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
+    if (sensor.type !== "condition") {
+      charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
+    }
     idx++;
   }
 

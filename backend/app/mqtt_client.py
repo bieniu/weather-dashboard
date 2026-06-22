@@ -70,31 +70,61 @@ async def mqtt_listener() -> None:
 
                     try:
                         payload = json.loads(message.payload)
-                        value = float(payload["value"])
-                        unit = str(payload["unit"])
-                    except (json.JSONDecodeError, KeyError, ValueError) as e:
+                    except json.JSONDecodeError as e:
+                        print(f"[MQTT] Payload parse error on topic {topic}: {e}")
+                        continue
+
+                    sensor_config = settings.sensors.get(parameter)
+                    is_condition = sensor_config and sensor_config.type == "condition"
+
+                    try:
+                        if is_condition:
+                            value_str = str(payload["value"])
+                            icon = str(payload.get("icon", ""))
+                        else:
+                            value = float(payload["value"])
+                            unit = str(payload["unit"])
+                    except (KeyError, ValueError) as e:
                         print(f"[MQTT] Payload parse error on topic {topic}: {e}")
                         continue
 
                     # Save to database
                     async with SessionLocal() as db:
-                        reading = WeatherReading(
-                            parameter=parameter,
-                            value=value,
-                            unit=unit,
-                            timestamp=datetime.now(timezone.utc),
-                        )
+                        if is_condition:
+                            reading = WeatherReading(
+                                parameter=parameter,
+                                value=None,
+                                unit="",
+                                value_str=value_str,
+                                icon=icon,
+                                timestamp=datetime.now(timezone.utc),
+                            )
+                        else:
+                            reading = WeatherReading(
+                                parameter=parameter,
+                                value=value,
+                                unit=unit,
+                                timestamp=datetime.now(timezone.utc),
+                            )
                         db.add(reading)
                         await db.commit()
                         await db.refresh(reading)
 
                     # Broadcast to frontend via WebSocket
-                    await manager.broadcast({
-                        "parameter": parameter,
-                        "value": value,
-                        "unit": unit,
-                        "timestamp": reading.timestamp.isoformat(),
-                    })
+                    if is_condition:
+                        await manager.broadcast({
+                            "parameter": parameter,
+                            "value": value_str,
+                            "icon": icon,
+                            "timestamp": reading.timestamp.isoformat(),
+                        })
+                    else:
+                        await manager.broadcast({
+                            "parameter": parameter,
+                            "value": value,
+                            "unit": unit,
+                            "timestamp": reading.timestamp.isoformat(),
+                        })
 
         except aiomqtt.MqttError as e:
             print(f"[MQTT] Connection error: {e}. Retrying in 5s...")
