@@ -642,12 +642,12 @@ dev = [
     { name = "ty", specifier = "==0.0.52" },
 ]
 test = [
-    { name = "freezegun", specifier = ">=1.5,<2" },
-    { name = "httpx", specifier = ">=0.28,<1" },
-    { name = "pytest", specifier = ">=9.1,<10" },
-    { name = "pytest-asyncio", specifier = ">=1.4,<2" },
+    { name = "freezegun", specifier = "==1.5.5" },
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "pytest", specifier = "==9.1.1" },
+    { name = "pytest-asyncio", specifier = "==1.4.0" },
     { name = "pytest-cov", specifier = "==7.1.0" },
-    { name = "pytest-timeout", specifier = ">=2.3,<3" },
+    { name = "pytest-timeout", specifier = "==2.4.0" },
 ]
 
 [[package]]
