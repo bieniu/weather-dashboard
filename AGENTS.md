@@ -28,7 +28,7 @@ docker compose up
 - WebSocket at `/api/weather/ws` pushes live readings; REST at `/api/weather/sensors` and `/api/weather/history/{parameter}?hours=N`
 - DB cleanup: deletes readings older than 30d, runs every hour in a background asyncio task
 - Linting: `ruff check backend` (run from root)
-- Formatting: `ruff format backend` (run from root). Ruff selects `ALL` rules with minimal ignores (D203, D213) and `D104` ignored in `__init__.py` via per-file-ignores.
+- Formatting: `ruff format backend` (run from root). Ruff selects `ALL` rules with minimal ignores (D203, D213).
 - Type checking: `ty check backend` (run from root). configured in `backend/pyproject.toml`.
 - Both ruff and ty are dev dependencies — install via `uv sync --frozen` from `backend/`.
 - Pre-commit equivalent: `prek` (config in `prek.toml`). Run `prek run` to run all hooks.
