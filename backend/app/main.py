@@ -68,9 +68,18 @@ CSP_HEADER = (
 
 
 class CloudflareIPMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    """Middleware that overrides client IP with the Cf-Connecting-IP header."""
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Set real_ip from Cf-Connecting-IP, falling back to client.host."""
         cf_ip = request.headers.get("Cf-Connecting-IP")
-        request.state.real_ip = cf_ip or (request.client.host if request.client else "unknown")
+        request.state.real_ip = cf_ip or (
+            request.client.host if request.client else "unknown"
+        )
         return await call_next(request)
 
 
