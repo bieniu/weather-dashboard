@@ -88,11 +88,6 @@ async def test_get_history_invalid_parameter(async_client) -> None:
     assert resp.json()["detail"] == "Invalid parameter"
 
 
-@pytest.mark.skip(reason="Requires real WebSocket over ASGI transport")
-async def test_websocket_endpoint(async_client) -> None:
-    """WebSocket test placeholder — needs live ASGI lifespan support."""
-
-
 async def test_get_sensors_structure(async_client) -> None:
     resp = await async_client.get("/api/weather/sensors")
     data = resp.json()
