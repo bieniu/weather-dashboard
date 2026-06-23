@@ -36,4 +36,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_URL="sqlite+aiosqlite:////data/weather.db"
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1,::1"]
