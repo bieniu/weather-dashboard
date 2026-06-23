@@ -4,14 +4,20 @@
 ## Structure
 
 ```
-backend/         FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomqtt)
-  app/main.py    Entrypoint — `uvicorn app.main:app`
-  app/config.py  Reads config.yaml + .env
-frontend/        Vanilla JS + Chart.js (CDN), no build step
-tests/backend/   Tests (pytest)
-.venv/           Python virtual environment (root dir)
-config.yaml      Sensor definitions (temperature, humidity, pressure, pm1/10/25)
-pyproject.toml   Project config, deps, ruff/ty settings (root dir)
+backend/           FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomqtt)
+  app/main.py      Entrypoint — `uvicorn app.main:app`
+  app/config.py    Reads config.yaml + .env
+frontend/          Vanilla JS + Chart.js (CDN), no build step
+  weather_icons/   16 SVG weather icons (Meteocons fill style)
+utils/             Icon generation scripts
+  generate_icons.py  Generates weather icons from SVGs
+  icon_with_bg.svg   Icon template with background
+  icon.svg           Base icon SVG
+tests/backend/     Tests (pytest)
+.venv/             Python virtual environment (root dir)
+config.yaml        Sensor definitions (temperature, humidity, pressure, pm1/10/25)
+pyproject.toml     Project config, deps, ruff/ty settings (root dir)
+README.md          Minimal docs — icon source reference only
 ```
 
 ## Setup & run
