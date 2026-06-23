@@ -291,7 +291,7 @@ body {
 .weather-card__value-wrap--condition {
   align-items: center;
   gap: 12px;
-  padding-top: 0;
+  padding: 0;
   margin-top: -11px;
 }
 
@@ -301,6 +301,11 @@ body {
 
 #card-condition {
   gap: 0;
+}
+
+#card-condition .weather-card__updated {
+  margin: 0;
+  margin-top: -13px;
 }
 
 .weather-card__icon--img {
