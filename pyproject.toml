@@ -21,6 +21,20 @@ dev = [
   "ty==0.0.52",
 ]
 
+test = [
+  "freezegun==1.5.5",
+  "httpx==0.28.1",
+  "pytest-asyncio==1.4.0",
+  "pytest-cov==7.1.0",
+  "pytest-timeout==2.4.0",
+  "pytest==9.1.1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests/backend"]
+
+
 [tool.ruff]
 target-version = "py314"
 
@@ -30,6 +44,16 @@ lint.ignore = [
     "D203",     # 1 blank line required before class docstring
     "D213",     # Multi-line docstring summary should start at the second line
 ]
+
+lint.per-file-ignores = {"tests/backend/*" = [
+    "ANN",      # No type annotations needed in tests
+    "ARG001",   # Unused fixture arguments
+    "PLC0415",  # Local imports in tests are intentional
+    "PLR2004",  # Magic values in assertions are fine
+    "S101",     # `assert` is expected in tests
+    "SLF001",   # Accessing private members for test verification
+    "TC003",    # No need for TYPE_CHECKING blocks in tests
+]}
 
 [tool.ty.environment]
 python-version = "3.14"
