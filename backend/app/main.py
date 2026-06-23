@@ -1,23 +1,30 @@
 """Main FastAPI application — Weather Dashboard."""
 
 import asyncio
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone, timedelta
+import logging
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
 from sqlalchemy import delete
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import settings
-from .database import init_db, SessionLocal
+from .database import SessionLocal, init_db
 from .models import WeatherReading
 from .mqtt_client import mqtt_listener
 from .routers.weather import router as weather_router
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Awaitable, Callable
+
+    from starlette.requests import Request
+    from starlette.responses import Response
+
+logger = logging.getLogger(__name__)
 
 
 async def cleanup_old_readings() -> None:
@@ -25,16 +32,16 @@ async def cleanup_old_readings() -> None:
     while True:
         await asyncio.sleep(3600)
         async with SessionLocal() as db:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+            cutoff = datetime.now(UTC) - timedelta(days=30)
             await db.execute(
-                delete(WeatherReading).where(WeatherReading.timestamp < cutoff)
+                delete(WeatherReading).where(WeatherReading.timestamp < cutoff),
             )
             await db.commit()
-            print("[Cleanup] Old records removed")
+            logger.info("Old records removed")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     """Startup/shutdown lifecycle — initialize DB, MQTT and cleanup tasks."""
     await init_db()
     mqtt_task = asyncio.create_task(mqtt_listener())
@@ -42,14 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     cleanup_task.cancel()
     mqtt_task.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await mqtt_task
-    except asyncio.CancelledError:
-        pass
-    try:
+    with suppress(asyncio.CancelledError):
         await cleanup_task
-    except asyncio.CancelledError:
-        pass
 
 
 CSP_HEADER = (
@@ -65,7 +68,14 @@ CSP_HEADER = (
 
 
 class CSPMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+    """Middleware that adds Content-Security-Policy header to all responses."""
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Add CSP header to every response."""
         response: Response = await call_next(request)
         response.headers["Content-Security-Policy"] = CSP_HEADER
         return response

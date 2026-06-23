@@ -1,13 +1,15 @@
 """ORM models for weather readings."""
 
-from sqlalchemy import Column, Integer, Float, String, DateTime, Index
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from sqlalchemy import Column, DateTime, Float, Index, Integer, String
 
 from .database import Base
 
 
 class WeatherReading(Base):
     """Single weather reading (temperature, humidity, or condition)."""
+
     __tablename__ = "weather_readings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -18,7 +20,7 @@ class WeatherReading(Base):
     icon = Column(String(50), nullable=True)  # weather icon for condition sensor
     timestamp = Column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
 

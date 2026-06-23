@@ -1,8 +1,8 @@
 """Pydantic schemas for weather data."""
 
-from pydantic import BaseModel
-from pydantic import field_serializer
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from pydantic import BaseModel, field_serializer
 
 
 class WeatherReadingOut(BaseModel):
@@ -20,9 +20,7 @@ class WeatherReadingOut(BaseModel):
 
     @field_serializer("timestamp")
     def ensure_utc(self, dt: datetime) -> str:
+        """Serialize timestamp as ISO 8601 string with UTC timezone."""
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt.isoformat()
-
-
-

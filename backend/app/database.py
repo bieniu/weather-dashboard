@@ -1,11 +1,13 @@
 """Database configuration — async SQLAlchemy with SQLite."""
 
-from collections.abc import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase
-
 import os
+from typing import TYPE_CHECKING
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+from sqlalchemy.orm import DeclarativeBase
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./weather.db")
 
@@ -23,7 +25,7 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency — yields a database session."""
     async with SessionLocal() as session:
         yield session
