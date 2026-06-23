@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:python3.14-alpine AS builder
 
 WORKDIR /app
-COPY backend/pyproject.toml backend/uv.lock ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project
 COPY backend/ ./backend/
 RUN uv sync --no-dev --frozen
