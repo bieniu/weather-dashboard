@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     mqtt_user: str
     mqtt_password: str = ""
     domain: str = "localhost"
-    port: int = 8000
+    port: int = 8332
     scheme: str = "http"
     topic_prefix: str = _yaml_config["topic_prefix"]
     sensors: dict[str, SensorConfig] = {
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
         """Return allowed CORS origins."""
         return [
             f"{self.scheme}://{self.domain}:{self.port}",
-            "http://127.0.0.1:8000",
+            "http://127.0.0.1:8332",
         ]
 
 

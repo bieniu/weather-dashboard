@@ -5,7 +5,7 @@ services:
     container_name: weather-dashboard
     restart: unless-stopped
     ports:
-      - "8332:8000"
+      - "8332:8332"
     volumes:
       - weather-db:/data
     environment:
@@ -14,7 +14,7 @@ services:
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
       - DOMAIN=${DOMAIN:-localhost}
-      - PORT=${PORT:-8000}
+      - PORT=${PORT:-8332}
       - SCHEME=${SCHEME:-http}
 
 volumes:

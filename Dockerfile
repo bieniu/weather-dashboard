@@ -31,9 +31,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     MQTT_PORT="1883" \
     MQTT_USER="" \
     DOMAIN="localhost" \
-    PORT="8000" \
+    PORT="8332" \
     SCHEME="http" \
     DATABASE_URL="sqlite+aiosqlite:////data/weather.db"
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1,::1"]
+EXPOSE 8332
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8332", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1,::1"]
