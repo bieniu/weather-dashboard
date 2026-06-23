@@ -16,6 +16,7 @@ from .config import settings
 from .database import SessionLocal, init_db
 from .models import WeatherReading
 from .mqtt_client import mqtt_listener
+from .ratelimit import RateLimitMiddleware
 from .routers.weather import router as weather_router
 
 if TYPE_CHECKING:
@@ -106,6 +107,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(CloudflareIPMiddleware)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(CSPMiddleware)
 
 app.include_router(weather_router)
