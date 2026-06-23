@@ -67,6 +67,22 @@ CSP_HEADER = (
 )
 
 
+class CloudflareIPMiddleware(BaseHTTPMiddleware):
+    """Middleware that overrides client IP with the Cf-Connecting-IP header."""
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Set real_ip from Cf-Connecting-IP, falling back to client.host."""
+        cf_ip = request.headers.get("Cf-Connecting-IP")
+        request.state.real_ip = cf_ip or (
+            request.client.host if request.client else "unknown"
+        )
+        return await call_next(request)
+
+
 class CSPMiddleware(BaseHTTPMiddleware):
     """Middleware that adds Content-Security-Policy header to all responses."""
 
@@ -89,6 +105,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CloudflareIPMiddleware)
 app.add_middleware(CSPMiddleware)
 
 app.include_router(weather_router)
