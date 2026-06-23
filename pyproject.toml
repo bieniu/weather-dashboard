@@ -32,7 +32,7 @@ test = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["backend/tests"]
+testpaths = ["tests/backend"]
 
 
 [tool.ruff]
@@ -45,7 +45,7 @@ lint.ignore = [
     "D213",     # Multi-line docstring summary should start at the second line
 ]
 
-lint.per-file-ignores = {"backend/tests/*" = [
+lint.per-file-ignores = {"tests/backend/*" = [
     "ANN",      # No type annotations needed in tests
     "ARG001",   # Unused fixture arguments
     "D",        # No docstrings needed in tests

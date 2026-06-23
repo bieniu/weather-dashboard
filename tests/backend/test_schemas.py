@@ -2,13 +2,10 @@
 
 from datetime import UTC, datetime
 
-from app.schemas import WeatherReadingOut
-
 
 def test_from_attributes() -> None:
-    from datetime import UTC
-
     from app.models import WeatherReading
+    from app.schemas import WeatherReadingOut
 
     orm = WeatherReading(
         id=42,
@@ -25,6 +22,8 @@ def test_from_attributes() -> None:
 
 
 def test_serialize_naive_timestamp_adds_utc() -> None:
+    from app.schemas import WeatherReadingOut
+
     data = WeatherReadingOut(
         id=1,
         parameter="temperature",
@@ -37,6 +36,8 @@ def test_serialize_naive_timestamp_adds_utc() -> None:
 
 
 def test_serialize_utc_timestamp_stays_utc() -> None:
+    from app.schemas import WeatherReadingOut
+
     dt = datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
     data = WeatherReadingOut(
         id=2,
@@ -50,6 +51,8 @@ def test_serialize_utc_timestamp_stays_utc() -> None:
 
 
 def test_condition_fields_nullable() -> None:
+    from app.schemas import WeatherReadingOut
+
     data = WeatherReadingOut(
         id=3,
         parameter="condition",

@@ -8,6 +8,7 @@ backend/         FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomqtt
   app/main.py    Entrypoint — `uvicorn app.main:app`
   app/config.py  Reads config.yaml + .env
 frontend/        Vanilla JS + Chart.js (CDN), no build step
+tests/backend/   Tests (pytest)
 .venv/           Python virtual environment (root dir)
 config.yaml      Sensor definitions (temperature, humidity, pressure, pm1/10/25)
 pyproject.toml   Project config, deps, ruff/ty settings (root dir)
@@ -40,8 +41,8 @@ docker compose up
 
 ```bash
 uv sync --group test       # install test deps (run from root)
-pytest backend/tests -v    # run all tests (run from root)
-pytest backend/tests -v --timeout=10 -k "test_mqtt"  # filter by name
+pytest tests/backend -v    # run all tests (run from root)
+pytest tests/backend -v --timeout=10 -k "test_mqtt"  # filter by name
 ```
 
 - **Framework:** pytest + pytest-asyncio (auto mode), pytest-timeout (10s default)
@@ -51,7 +52,7 @@ pytest backend/tests -v --timeout=10 -k "test_mqtt"  # filter by name
 - **WebSocket:** tested via `WebSocketManager` unit tests; endpoint test skipped (needs live ASGI)
 - **HTTP client:** `httpx.AsyncClient` with `ASGITransport` and `get_db` overridden to test engine
 
-### Test files (`backend/tests/`)
+### Test files (`tests/backend/`)
 
 | File | What it covers |
 |---|---|

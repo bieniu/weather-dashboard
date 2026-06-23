@@ -1,6 +1,7 @@
 """Shared fixtures for backend tests."""
 
 import os
+import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
@@ -15,8 +16,9 @@ os.environ.setdefault("MQTT_PASSWORD", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 
 # Ensure CWD is the backend/ directory so that app.main resolves ../frontend
-_backend_dir = Path(__file__).resolve().parent.parent
+_backend_dir = Path(__file__).resolve().parent.parent.parent / "backend"
 os.chdir(str(_backend_dir))
+sys.path.insert(0, str(_backend_dir))
 
 
 @pytest.fixture
