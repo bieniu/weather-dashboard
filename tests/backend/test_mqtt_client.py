@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 
 def test_topic_parameter_map_contains_known_sensors() -> None:
+    """TOPIC_PARAMETER_MAP includes all configured sensor topics."""
     from app.mqtt_client import TOPIC_PARAMETER_MAP
 
     assert "weather-dashboard/temperature" in TOPIC_PARAMETER_MAP
@@ -16,13 +17,17 @@ def test_topic_parameter_map_contains_known_sensors() -> None:
 
 
 def test_topic_parameter_map_unknown_topic() -> None:
+    """TOPIC_PARAMETER_MAP does not contain topics not in config."""
     from app.mqtt_client import TOPIC_PARAMETER_MAP
 
     assert "weather-dashboard/unknown" not in TOPIC_PARAMETER_MAP
 
 
 class TestWebSocketManager:
+    """Unit tests for WebSocketManager — connect, disconnect, broadcast."""
+
     async def test_connect_adds_connection(self) -> None:
+        """Connect should accept the websocket and add it to active_connections."""
         from app.mqtt_client import WebSocketManager
 
         manager = WebSocketManager()
@@ -32,6 +37,7 @@ class TestWebSocketManager:
         ws.accept.assert_awaited_once()
 
     async def test_disconnect_removes_connection(self) -> None:
+        """Disconnect should remove the websocket from active_connections."""
         from app.mqtt_client import WebSocketManager
 
         manager = WebSocketManager()
@@ -41,6 +47,7 @@ class TestWebSocketManager:
         assert ws not in manager.active_connections
 
     async def test_broadcast_sends_to_all(self) -> None:
+        """Broadcast should send the JSON message to every connected client."""
         from app.mqtt_client import WebSocketManager
 
         manager = WebSocketManager()
@@ -56,6 +63,7 @@ class TestWebSocketManager:
         ws2.send_text.assert_awaited_once_with(expected)
 
     async def test_broadcast_removes_dead_connections(self) -> None:
+        """Broadcast should remove clients whose send_text raises an exception."""
         from app.mqtt_client import WebSocketManager
 
         manager = WebSocketManager()
@@ -73,6 +81,7 @@ class TestWebSocketManager:
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_numeric_message(monkeypatch, db_engine) -> None:
+    """A numeric MQTT message is persisted in the database."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     test_session_factory = async_sessionmaker(
@@ -102,6 +111,7 @@ async def test_process_numeric_message(monkeypatch, db_engine) -> None:
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_condition_message(monkeypatch, db_engine) -> None:
+    """A condition MQTT message is persisted with value_str and icon."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     test_session_factory = async_sessionmaker(
@@ -136,6 +146,7 @@ async def test_process_condition_message(monkeypatch, db_engine) -> None:
 async def test_process_unknown_topic_logs_warning(
     monkeypatch, caplog, db_engine
 ) -> None:
+    """An MQTT message for an unknown topic is silently ignored."""
     import logging
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -155,7 +166,6 @@ async def test_process_unknown_topic_logs_warning(
     with caplog.at_level(logging.WARNING):
         await _process_mqtt_message(message)
 
-    # No DB writes for unknown topics
     async with db_engine.connect() as conn:
         result = await conn.execute(text("SELECT COUNT(*) FROM weather_readings"))
         count = result.scalar()
@@ -165,6 +175,7 @@ async def test_process_unknown_topic_logs_warning(
 async def test_process_invalid_json_logs_warning(
     monkeypatch, caplog, db_engine
 ) -> None:
+    """A malformed JSON payload logs a warning and does not persist."""
     import logging
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -194,6 +205,7 @@ async def test_process_invalid_json_logs_warning(
 async def test_process_missing_value_logs_warning(
     monkeypatch, caplog, db_engine
 ) -> None:
+    """An MQTT payload without a 'value' key logs a warning and skips persistence."""
     import logging
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -222,6 +234,7 @@ async def test_process_missing_value_logs_warning(
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_numeric_broadcasts(monkeypatch, db_engine) -> None:
+    """A numeric MQTT message broadcasts the reading via WebSocketManager."""
     from unittest.mock import AsyncMock
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -235,7 +248,6 @@ async def test_process_numeric_broadcasts(monkeypatch, db_engine) -> None:
 
     ws = AsyncMock()
 
-    # Patch the module-level manager
     import app.mqtt_client as mqtt_mod
 
     original_manager = mqtt_mod.manager
@@ -260,5 +272,4 @@ async def test_process_numeric_broadcasts(monkeypatch, db_engine) -> None:
     )
     ws.send_text.assert_awaited_once_with(expected)
 
-    # Restore original manager
     monkeypatch.setattr(mqtt_mod, "manager", original_manager)

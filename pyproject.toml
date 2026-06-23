@@ -48,7 +48,6 @@ lint.ignore = [
 lint.per-file-ignores = {"tests/backend/*" = [
     "ANN",      # No type annotations needed in tests
     "ARG001",   # Unused fixture arguments
-    "D",        # No docstrings needed in tests
     "PLC0415",  # Local imports in tests are intentional
     "PLR2004",  # Magic values in assertions are fine
     "S101",     # `assert` is expected in tests

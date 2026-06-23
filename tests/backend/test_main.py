@@ -8,6 +8,7 @@ from freezegun import freeze_time
 async def test_cloudflare_ip_middleware_sets_real_ip(
     async_client,
 ) -> None:
+    """The CloudflareIP middleware sets real_ip from Cf-Connecting-IP header."""
     resp = await async_client.get(
         "/api/weather/sensors",
         headers={"Cf-Connecting-IP": "203.0.113.1"},
@@ -16,6 +17,7 @@ async def test_cloudflare_ip_middleware_sets_real_ip(
 
 
 async def test_csp_middleware_adds_header(async_client) -> None:
+    """Every response includes a Content-Security-Policy header."""
     resp = await async_client.get("/api/weather/sensors")
     assert "Content-Security-Policy" in resp.headers
     csp = resp.headers["Content-Security-Policy"]
@@ -23,6 +25,7 @@ async def test_csp_middleware_adds_header(async_client) -> None:
 
 
 async def test_cors_middleware_allows_origins(async_client) -> None:
+    """CORS preflight requests from allowed origins succeed."""
     resp = await async_client.options(
         "/api/weather/sensors",
         headers={
@@ -36,7 +39,7 @@ async def test_cors_middleware_allows_origins(async_client) -> None:
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_cleanup_old_readings(monkeypatch, db_engine) -> None:
-    """Verify cleanup removes readings older than 30 days."""
+    """Readings older than 30 days are removed by cleanup_old_readings."""
     import asyncio
     from contextlib import suppress
 
@@ -88,7 +91,7 @@ async def test_cleanup_old_readings(monkeypatch, db_engine) -> None:
 
 
 async def test_cleanup_keeps_recent_readings(monkeypatch, db_engine) -> None:
-    """Verify readings within 30 days are not removed."""
+    """Readings younger than 30 days are preserved by cleanup_old_readings."""
     import asyncio
     from contextlib import suppress
 

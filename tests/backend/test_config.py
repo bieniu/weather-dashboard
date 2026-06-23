@@ -2,6 +2,7 @@
 
 
 def test_sensor_config_defaults() -> None:
+    """SensorConfig applies default type='numeric', round=1, unit=''."""
     from app.config import SensorConfig
 
     config = SensorConfig(name="Test", icon="mdi:test", color="#000")
@@ -11,6 +12,7 @@ def test_sensor_config_defaults() -> None:
 
 
 def test_sensor_config_explicit() -> None:
+    """SensorConfig accepts all fields explicitly."""
     from app.config import SensorConfig
 
     config = SensorConfig(
@@ -27,6 +29,7 @@ def test_sensor_config_explicit() -> None:
 
 
 def test_settings_loads_sensors() -> None:
+    """Settings reads all sensor keys from config.yaml."""
     from app.config import settings
 
     assert "temperature" in settings.sensors
@@ -34,12 +37,14 @@ def test_settings_loads_sensors() -> None:
 
 
 def test_settings_topic_prefix() -> None:
+    """Settings reads topic_prefix from config.yaml."""
     from app.config import settings
 
     assert settings.topic_prefix == "weather-dashboard"
 
 
 def test_settings_cors_origins() -> None:
+    """Settings.cors_origins returns expected list of origins."""
     from app.config import settings
 
     origins = settings.cors_origins

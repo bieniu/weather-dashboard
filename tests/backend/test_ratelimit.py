@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 
 async def test_single_request_passes() -> None:
+    """A single request under the limit is allowed through."""
     from app.ratelimit import RateLimitMiddleware
 
     request = MagicMock()
@@ -19,11 +20,11 @@ async def test_single_request_passes() -> None:
 
 
 async def test_rate_limit_exceeded() -> None:
+    """Requests beyond the rate limit return 429."""
     from app.ratelimit import RATE_LIMIT, RateLimitMiddleware
 
     middleware = RateLimitMiddleware(MagicMock())
 
-    # Saturate the rate limit
     ip = "5.6.7.8"
     for _ in range(RATE_LIMIT):
         request = MagicMock()
@@ -34,7 +35,6 @@ async def test_rate_limit_exceeded() -> None:
         resp = await middleware.dispatch(request, call_next)
         assert resp.status_code == 200
 
-    # One more should be rejected
     request = MagicMock()
     request.url.path = "/api/weather/sensors"
     request.state.real_ip = ip
@@ -45,6 +45,7 @@ async def test_rate_limit_exceeded() -> None:
 
 
 async def test_rate_limit_returns_retry_after_header() -> None:
+    """A 429 response includes a Retry-After header."""
     from app.ratelimit import RATE_LIMIT, RateLimitMiddleware
 
     middleware = RateLimitMiddleware(MagicMock())
@@ -68,6 +69,7 @@ async def test_rate_limit_returns_retry_after_header() -> None:
 
 
 async def test_websocket_path_bypasses_rate_limit() -> None:
+    """The WebSocket endpoint is excluded from rate limiting."""
     from app.ratelimit import RateLimitMiddleware
 
     middleware = RateLimitMiddleware(MagicMock())
@@ -83,6 +85,7 @@ async def test_websocket_path_bypasses_rate_limit() -> None:
 
 
 async def test_different_ips_have_separate_windows() -> None:
+    """Rate limit windows are isolated per IP address."""
     from app.ratelimit import RateLimitMiddleware
 
     middleware = RateLimitMiddleware(MagicMock())
@@ -93,7 +96,6 @@ async def test_different_ips_have_separate_windows() -> None:
         req.state.real_ip = ip
         return req
 
-    # Saturate ip_a
     ip_a = "10.0.0.1"
     ip_b = "10.0.0.2"
 
@@ -102,12 +104,10 @@ async def test_different_ips_have_separate_windows() -> None:
         call_next.return_value = MagicMock(status_code=200)
         await middleware.dispatch(make_request(ip_a), call_next)
 
-    # ip_a should be limited now
     call_next = AsyncMock()
     resp = await middleware.dispatch(make_request(ip_a), call_next)
     assert resp.status_code == 429
 
-    # ip_b should still pass
     call_next = AsyncMock()
     call_next.return_value = MagicMock(status_code=200)
     resp = await middleware.dispatch(make_request(ip_b), call_next)
@@ -115,6 +115,7 @@ async def test_different_ips_have_separate_windows() -> None:
 
 
 async def test_cleanup_removes_expired_entries() -> None:
+    """The periodic cleanup removes stale IP entries from the window."""
     from app.ratelimit import RateLimitMiddleware
 
     middleware = RateLimitMiddleware(MagicMock())
@@ -129,15 +130,13 @@ async def test_cleanup_removes_expired_entries() -> None:
 
     assert "expired_ip" in middleware._windows
 
-    # Simulate time passing by manipulating the window directly
     import time
 
-    old_time = time.monotonic() - 120  # older than window
+    old_time = time.monotonic() - 120
     middleware._windows["expired_ip"] = type(middleware._windows["expired_ip"])(
         [old_time]
     )
 
-    # Force cleanup via request count
     for _ in range(99):
         other_req = MagicMock()
         other_req.url.path = "/api/weather/sensors"
@@ -146,7 +145,6 @@ async def test_cleanup_removes_expired_entries() -> None:
         other_call.return_value = MagicMock(status_code=200)
         await middleware.dispatch(other_req, other_call)
 
-    # 100th request triggers cleanup
     trigger_req = MagicMock()
     trigger_req.url.path = "/api/weather/sensors"
     trigger_req.state.real_ip = "trigger"

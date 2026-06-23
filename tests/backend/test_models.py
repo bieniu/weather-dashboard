@@ -7,6 +7,7 @@ from sqlalchemy import inspect
 
 
 def test_weather_reading_numeric_creation() -> None:
+    """A numeric reading sets value/unit and leaves value_str/icon as None."""
     from app.models import WeatherReading
 
     r = WeatherReading(parameter="temperature", value=22.5, unit="°C")
@@ -18,6 +19,7 @@ def test_weather_reading_numeric_creation() -> None:
 
 
 def test_weather_reading_condition_creation() -> None:
+    """A condition reading sets value_str/icon and leaves value as None."""
     from app.models import WeatherReading
 
     r = WeatherReading(
@@ -34,6 +36,7 @@ def test_weather_reading_condition_creation() -> None:
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_default_timestamp(db_session) -> None:
+    """A new WeatherReading gets timestamp set to datetime.now(UTC)."""
     from app.models import WeatherReading
 
     r = WeatherReading(parameter="temperature", value=22.5, unit="°C")
@@ -50,6 +53,7 @@ async def test_default_timestamp(db_session) -> None:
 
 
 async def test_compound_index_exists(db_engine) -> None:
+    """Verify the (parameter, timestamp) compound index exists."""
     async with db_engine.connect() as conn:
         indexes = await conn.run_sync(
             lambda sync_conn: inspect(sync_conn).get_indexes("weather_readings")

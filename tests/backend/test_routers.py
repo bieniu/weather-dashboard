@@ -9,6 +9,7 @@ pytestmark = pytest.mark.timeout(10)
 
 
 async def test_get_sensors(async_client) -> None:
+    """GET /api/weather/sensors returns sensor config from config.yaml."""
     resp = await async_client.get("/api/weather/sensors")
     assert resp.status_code == 200
     data = resp.json()
@@ -18,41 +19,39 @@ async def test_get_sensors(async_client) -> None:
 
 
 async def test_get_current_empty_db(async_client) -> None:
+    """GET /api/weather/current returns null values when DB is empty."""
     resp = await async_client.get("/api/weather/current")
     assert resp.status_code == 200
     data = resp.json()
-    # All sensor values should be null in empty DB
     for value in data.values():
         assert value is None
 
 
 async def test_get_current_with_data(async_client, seed_data) -> None:
+    """GET /api/weather/current returns the latest reading per sensor."""
     resp = await async_client.get("/api/weather/current")
     assert resp.status_code == 200
     data = resp.json()
 
-    # temperature should have latest value (24.0)
     assert data["temperature"] is not None
     assert data["temperature"]["parameter"] == "temperature"
     assert data["temperature"]["value"] == 24.0
 
-    # humidity should have latest value (55.0)
     assert data["humidity"] is not None
     assert data["humidity"]["value"] == 55.0
 
-    # condition should have latest string value
     assert data["condition"] is not None
     assert data["condition"]["value_str"] == "sunny"
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_get_history(async_client, db_session) -> None:
+    """GET /api/weather/history/{param} filters by hours and returns ordered results."""
     from app.models import WeatherReading
 
     now = datetime.now(UTC)
     import datetime as dt
 
-    # Insert readings at different times
     old = WeatherReading(
         parameter="temperature",
         value=10.0,
@@ -68,14 +67,12 @@ async def test_get_history(async_client, db_session) -> None:
     db_session.add_all([old, recent])
     await db_session.commit()
 
-    # Default hours=12 should only include recent
     resp = await async_client.get("/api/weather/history/temperature")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
     assert data[0]["value"] == 20.0
 
-    # hours=48 should include both
     resp = await async_client.get("/api/weather/history/temperature?hours=48")
     assert resp.status_code == 200
     data = resp.json()
@@ -83,15 +80,16 @@ async def test_get_history(async_client, db_session) -> None:
 
 
 async def test_get_history_invalid_parameter(async_client) -> None:
+    """GET /api/weather/history/{param} with unknown sensor returns 400."""
     resp = await async_client.get("/api/weather/history/nonexistent")
     assert resp.status_code == 400
     assert resp.json()["detail"] == "Invalid parameter"
 
 
 async def test_get_sensors_structure(async_client) -> None:
+    """GET /api/weather/sensors returns all expected keys with required fields."""
     resp = await async_client.get("/api/weather/sensors")
     data = resp.json()
-    # Check all sensor keys from config.yaml are present
     expected_sensors = {
         "condition",
         "temperature",
