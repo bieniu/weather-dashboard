@@ -4,23 +4,56 @@ const WS_URL = `${WS_PROTOCOL}//${location.host}/api/weather/ws`;
 const HISTORY_HOURS = 12;
 const MAX_CHART_POINTS = 144;
 
-const WEATHER_ICON_MAP = {
-  "clear-night": "clear_night",
-  "cloudy": "cloud",
-  "exceptional": "warning",
-  "fog": "foggy",
-  "hail": "weather_hail",
-  "lightning": "thunderstorm",
-  "lightning-rainy": "thunderstorm_and_rain",
-  "partlycloudy": "partly_cloudy_day",
-  "pouring": "rainy_heavy",
-  "rainy": "rainy",
-  "snowy": "snowy",
-  "snowy-rainy": "weather_snowy_rainy",
-  "sunny": "sunny",
-  "windy": "air",
-  "windy-variant": "airwave",
+const MDI_TO_KEY = {
+  "weather-sunny": "sunny",
+  "weather-cloudy": "cloudy",
+  "weather-foggy": "fog",
+  "weather-hail": "hail",
+  "weather-partly-cloudy": "partlycloudy",
+  "weather-pouring": "pouring",
+  "weather-rainy": "rainy",
+  "weather-snowy": "snowy",
+  "weather-snowy-rainy": "snowy-rainy",
+  "weather-windy": "windy",
+  "weather-windy-variant": "windy-variant",
+  "weather-lightning": "lightning",
+  "weather-lightning-rainy": "lightning-rainy",
+  "weather-clear-night": "clear-night",
+  "clear-night": "clear-night",
+  "weather-night": "clear-night",
+  "weather-exceptional": "exceptional",
 };
+
+const SVG_FILE = {
+  "clear-night": "clear-night.svg",
+  "cloudy": "cloudy.svg",
+  "exceptional": "exceptional.svg",
+  "fog": "fog.svg",
+  "hail": "hail.svg",
+  "lightning": "lightning.svg",
+  "lightning-rainy": "lightning-rainy.svg",
+  "pouring": "pouring.svg",
+  "rainy": "rainy.svg",
+  "snowy": "snowy.svg",
+  "snowy-rainy": "snowy-rainy.svg",
+  "sunny": "sunny.svg",
+  "windy": "windy.svg",
+  "windy-variant": "windy-variant.svg",
+};
+
+function getConditionSvgPath(iconField) {
+  const raw = iconField.startsWith("mdi:") ? iconField.slice(4) : iconField;
+  const key = MDI_TO_KEY[raw] || raw;
+
+  if (key === "partlycloudy") {
+    const hour = new Date().getHours();
+    return hour >= 6 && hour < 20
+      ? "weather_icons/partly-cloudy-day.svg"
+      : "weather_icons/partly-cloudy-night.svg";
+  }
+  const file = SVG_FILE[key];
+  return file ? `weather_icons/${file}` : null;
+}
 
 const charts = {};
 let sensorsConfig = {};
@@ -61,11 +94,12 @@ function createCard(sensorKey, sensor, index) {
 
   if (sensor.type === "condition") {
     card.innerHTML = `
-      <div class="weather-card__header">
-        <span class="weather-card__icon weather-card__icon--condition material-symbols-rounded" id="${sensorKey}-icon">${resolveIcon(sensor.icon)}</span>
+      <div class="weather-card__header weather-card__header--condition">
         <span class="weather-card__label">${sensor.name}</span>
       </div>
-      <div class="weather-card__value-wrap">
+      <div class="weather-card__value-wrap weather-card__value-wrap--condition">
+        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img weather-card__icon--hidden" id="${sensorKey}-icon-img" src="" alt="">
+        <span class="weather-card__icon weather-card__icon--condition weather-card__icon--fallback material-symbols-rounded" id="${sensorKey}-icon-fallback">${resolveIcon(sensor.icon)}</span>
         <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
@@ -169,13 +203,20 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   if (sensor.type === "condition") {
     const valueEl = document.getElementById(`${parameter}-value`);
     const updatedEl = document.getElementById(`${parameter}-updated`);
-    const iconEl = document.getElementById(`${parameter}-icon`);
     if (valueEl) {
       valueEl.textContent = value ?? "—";
       flashValue(valueEl, sensor.color);
     }
-    if (iconEl && icon) {
-      iconEl.textContent = WEATHER_ICON_MAP[icon] || icon;
+    if (value) {
+      const conditionKey = icon || value;
+      const img = document.getElementById(`${parameter}-icon-img`);
+      if (img) {
+        img.src = getConditionSvgPath(conditionKey);
+        img.alt = value;
+        img.classList.remove("weather-card__icon--hidden");
+      }
+      const fallback = document.getElementById(`${parameter}-icon-fallback`);
+      if (fallback) fallback.classList.add("weather-card__icon--hidden");
     }
     if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
   } else {
