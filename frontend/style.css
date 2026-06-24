@@ -351,6 +351,10 @@ body {
   font-weight: 400;
   font-variant-numeric: normal;
   letter-spacing: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* =============================================
