@@ -22,7 +22,10 @@ def read_svg(path):
 
 def remove_youtube_script(content):
     return re.sub(
-        r"<script[^>]*>.*?</script>", "", content, flags=re.DOTALL | re.IGNORECASE
+        r"<script\b[^>]*>.*?</script\b[^>]*>",
+        "",
+        content,
+        flags=re.DOTALL | re.IGNORECASE,
     )
 
 
