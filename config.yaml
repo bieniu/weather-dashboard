@@ -53,6 +53,7 @@ sensors:
     unit: µg/m³
   water_level:
     name: Poziom wody w Bzurze
+    icon: mdi:waves
     color: "#2196F3"
     round: 0
     unit: cm
