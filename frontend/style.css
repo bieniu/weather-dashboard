@@ -351,9 +351,7 @@ body {
   letter-spacing: normal;
 }
 
-#card-condition {
-  grid-column: 1 / -1;
-}
+
 
 /* =============================================
    Responsive

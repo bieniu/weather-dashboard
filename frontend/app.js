@@ -95,14 +95,19 @@ function createCard(sensorKey, sensor, index) {
   card.style.setProperty("--card-index", index);
   card.style.setProperty("--sensor-color", sensor.color);
 
-  if (sensor.type === "condition") {
+  if (sensor.type === "condition" || sensor.type === "text") {
+    const iconFile = sensorKey.replace(/_/g, "-");
     card.innerHTML = `
       <div class="weather-card__header weather-card__header--condition">
         <span class="weather-card__label">${sensor.name}</span>
       </div>
       <div class="weather-card__value-wrap weather-card__value-wrap--condition">
+        ${sensor.type === "condition" ? `
         <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img weather-card__icon--hidden" id="${sensorKey}-icon-img" src="" alt="">
         <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-fallback" src="weather_icons/not-available.svg" alt="">
+        ` : `
+        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-img" src="weather_icons/${iconFile}.svg" alt="">
+        `}
         <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
@@ -224,6 +229,14 @@ function updateCard(parameter, value, unit, timestamp, icon) {
       if (fallback) fallback.classList.add("weather-card__icon--hidden");
     }
     if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
+  } else if (sensor.type === "text") {
+    const valueEl = document.getElementById(`${parameter}-value`);
+    const updatedEl = document.getElementById(`${parameter}-updated`);
+    if (valueEl) {
+      valueEl.textContent = value ?? "—";
+      flashValue(valueEl, sensor.color);
+    }
+    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
   } else {
     const valueEl = document.getElementById(`${parameter}-value`);
     const unitEl = document.getElementById(`${parameter}-unit`);
@@ -256,7 +269,7 @@ async function loadHistory(parameter) {
     const history = await res.json();
 
     const sensor = sensorsConfig[parameter];
-    if (sensor?.type === "condition") {
+    if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
         const last = history[history.length - 1];
         updateCard(parameter, last.value_str, null, last.timestamp, last.icon);
@@ -346,7 +359,7 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    if (sensor.type !== "condition") {
+    if (sensor.type !== "condition" && sensor.type !== "text") {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     }
     idx++;

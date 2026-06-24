@@ -92,6 +92,7 @@ async def test_get_sensors_structure(async_client) -> None:
     data = resp.json()
     expected_sensors = {
         "condition",
+        "air_quality",
         "temperature",
         "apparent_temperature",
         "humidity",

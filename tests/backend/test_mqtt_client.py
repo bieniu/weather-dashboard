@@ -143,6 +143,38 @@ async def test_process_condition_message(monkeypatch, db_engine) -> None:
     assert row[4] == "mdi:weather-sunny"
 
 
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_text_message(monkeypatch, db_engine) -> None:
+    """A text-type MQTT message is persisted with value_str and no icon."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/air_quality")
+    message.payload = json.dumps({"value": "bardzo dobra"}).encode()
+
+    from app.mqtt_client import _process_mqtt_message
+
+    await _process_mqtt_message(message)
+
+    async with db_engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT parameter, value, unit, value_str, icon FROM weather_readings")
+        )
+        row = result.fetchone()
+    assert row is not None
+    assert row[0] == "air_quality"
+    assert row[1] is None
+    assert row[2] == ""
+    assert row[3] == "bardzo dobra"
+    assert row[4] == ""
+
+
 async def test_process_unknown_topic_logs_warning(
     monkeypatch, caplog, db_engine
 ) -> None:

@@ -110,6 +110,14 @@ async def seed_data(db_session: AsyncSession) -> None:
             timestamp=now - timedelta(minutes=30),
         ),
         WeatherReading(
+            parameter="air_quality",
+            value=None,
+            unit="",
+            value_str="bardzo dobra",
+            icon="",
+            timestamp=now - timedelta(minutes=15),
+        ),
+        WeatherReading(
             parameter="temperature",
             value=24.0,
             unit="°C",

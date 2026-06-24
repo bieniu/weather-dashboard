@@ -21,7 +21,7 @@ class SensorConfig(BaseModel):
     """Configuration for a single sensor."""
 
     name: str
-    icon: str
+    icon: str = ""
     color: str
     type: str = "numeric"
     round: int = 1
