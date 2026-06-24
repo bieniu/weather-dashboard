@@ -4,8 +4,11 @@ sensors:
   condition:
     type: condition
     name: Obecne warunki
-    icon: mdi:partly_cloudy_day
     color: "#FFB300"
+  air_quality:
+    type: text
+    name: Jakość powietrza
+    color: "#607D8B"
   temperature:
     name: Temperatura
     icon: mdi:thermometer
@@ -48,3 +51,8 @@ sensors:
     color: "#607D8B"
     round: 0
     unit: µg/m³
+  water_level:
+    name: Poziom wody w Bzurze
+    color: "#2196F3"
+    round: 0
+    unit: cm

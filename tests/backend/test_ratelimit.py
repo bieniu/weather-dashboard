@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 async def test_single_request_passes() -> None:
     """A single request under the limit is allowed through."""
-    from app.ratelimit import RateLimitMiddleware
+    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
 
     request = MagicMock()
     request.url.path = "/api/weather/sensors"
@@ -21,7 +21,10 @@ async def test_single_request_passes() -> None:
 
 async def test_rate_limit_exceeded() -> None:
     """Requests beyond the rate limit return 429."""
-    from app.ratelimit import RATE_LIMIT, RateLimitMiddleware
+    from app.ratelimit import (  # ty: ignore[unresolved-import]
+        RATE_LIMIT,
+        RateLimitMiddleware,
+    )
 
     middleware = RateLimitMiddleware(MagicMock())
 
@@ -46,7 +49,10 @@ async def test_rate_limit_exceeded() -> None:
 
 async def test_rate_limit_returns_retry_after_header() -> None:
     """A 429 response includes a Retry-After header."""
-    from app.ratelimit import RATE_LIMIT, RateLimitMiddleware
+    from app.ratelimit import (  # ty: ignore[unresolved-import]
+        RATE_LIMIT,
+        RateLimitMiddleware,
+    )
 
     middleware = RateLimitMiddleware(MagicMock())
 
@@ -70,7 +76,7 @@ async def test_rate_limit_returns_retry_after_header() -> None:
 
 async def test_websocket_path_bypasses_rate_limit() -> None:
     """The WebSocket endpoint is excluded from rate limiting."""
-    from app.ratelimit import RateLimitMiddleware
+    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
 
     middleware = RateLimitMiddleware(MagicMock())
 
@@ -86,7 +92,7 @@ async def test_websocket_path_bypasses_rate_limit() -> None:
 
 async def test_different_ips_have_separate_windows() -> None:
     """Rate limit windows are isolated per IP address."""
-    from app.ratelimit import RateLimitMiddleware
+    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
 
     middleware = RateLimitMiddleware(MagicMock())
 
@@ -116,7 +122,7 @@ async def test_different_ips_have_separate_windows() -> None:
 
 async def test_cleanup_removes_expired_entries() -> None:
     """The periodic cleanup removes stale IP entries from the window."""
-    from app.ratelimit import RateLimitMiddleware
+    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
 
     middleware = RateLimitMiddleware(MagicMock())
 

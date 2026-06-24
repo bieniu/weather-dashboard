@@ -66,11 +66,15 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
 
     sensor_config = settings.sensors.get(parameter)
     is_condition = sensor_config and sensor_config.type == "condition"
+    is_text = sensor_config and sensor_config.type == "text"
 
     try:
         if is_condition:
             value_str = str(payload["value"])
             icon = str(payload.get("icon", ""))
+        elif is_text:
+            value_str = str(payload["value"])
+            icon = ""
         else:
             value = float(payload["value"])
             unit = str(payload["unit"])
@@ -78,9 +82,11 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         logger.warning("Payload parse error on topic %s: %s", topic, e)
         return
 
+    is_string_type = is_condition or is_text
+
     # Save to database
     async with SessionLocal() as db:
-        if is_condition:
+        if is_string_type:
             reading = WeatherReading(
                 parameter=parameter,
                 value=None,
@@ -105,15 +111,15 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
             reading.timestamp = reading.timestamp.replace(tzinfo=UTC)
 
     # Broadcast to frontend via WebSocket
-    if is_condition:
-        await manager.broadcast(
-            {
-                "parameter": parameter,
-                "value": value_str,
-                "icon": icon,
-                "timestamp": reading.timestamp.isoformat(),
-            }
-        )
+    if is_string_type:
+        broadcast_data = {
+            "parameter": parameter,
+            "value": value_str,
+            "timestamp": reading.timestamp.isoformat(),
+        }
+        if is_condition:
+            broadcast_data["icon"] = icon
+        await manager.broadcast(broadcast_data)
     else:
         await manager.broadcast(
             {
