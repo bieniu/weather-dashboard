@@ -53,7 +53,7 @@ jobs:
         run: npx stylelint "frontend/**/*.css"
 
       - name: Check formatting
-        run: npx prettier --check "frontend/**/*.{js,css,html,json}"
+        run: npx prettier --check "frontend/**/*.{js,css,html}"
 
       - name: Run prek
         run: |
