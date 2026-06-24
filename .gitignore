@@ -208,6 +208,7 @@ __marimo__/
 
 
 node_modules/
+coverage/
 
 weather.db
 backend/weather.db
