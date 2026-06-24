@@ -99,7 +99,7 @@ function createCard(sensorKey, sensor, index) {
       </div>
       <div class="weather-card__value-wrap weather-card__value-wrap--condition">
         <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img weather-card__icon--hidden" id="${sensorKey}-icon-img" src="" alt="">
-        <span class="weather-card__icon weather-card__icon--condition weather-card__icon--fallback material-symbols-rounded" id="${sensorKey}-icon-fallback">${resolveIcon(sensor.icon)}</span>
+        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-fallback" src="weather_icons/not-available.svg" alt="">
         <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
