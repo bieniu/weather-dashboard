@@ -51,3 +51,8 @@ sensors:
     color: "#607D8B"
     round: 0
     unit: µg/m³
+  water_level:
+    name: Poziom wody w Bzurze
+    color: "#2196F3"
+    round: 0
+    unit: cm
