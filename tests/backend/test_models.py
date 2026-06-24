@@ -8,7 +8,7 @@ from sqlalchemy import inspect
 
 def test_weather_reading_numeric_creation() -> None:
     """A numeric reading sets value/unit and leaves value_str/icon as None."""
-    from app.models import WeatherReading
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     r = WeatherReading(parameter="temperature", value=22.5, unit="°C")
     assert r.parameter == "temperature"
@@ -20,7 +20,7 @@ def test_weather_reading_numeric_creation() -> None:
 
 def test_weather_reading_condition_creation() -> None:
     """A condition reading sets value_str/icon and leaves value as None."""
-    from app.models import WeatherReading
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     r = WeatherReading(
         parameter="condition",
@@ -37,7 +37,7 @@ def test_weather_reading_condition_creation() -> None:
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_default_timestamp(db_session) -> None:
     """A new WeatherReading gets timestamp set to datetime.now(UTC)."""
-    from app.models import WeatherReading
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     r = WeatherReading(parameter="temperature", value=22.5, unit="°C")
     db_session.add(r)

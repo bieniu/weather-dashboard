@@ -25,7 +25,7 @@ sys.path.insert(0, str(_backend_dir))
 async def db_engine():
     """Create a fresh in-memory SQLite engine for each test."""
     engine = create_async_engine("sqlite+aiosqlite://", echo=False)
-    from app.database import Base
+    from app.database import Base  # ty: ignore[unresolved-import]
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -48,8 +48,8 @@ async def async_client(
     db_engine,
 ) -> AsyncGenerator[AsyncClient, Any]:
     """FastAPI test client with get_db overridden to use the test engine."""
-    from app.database import get_db
-    from app.main import app
+    from app.database import get_db  # ty: ignore[unresolved-import]
+    from app.main import app  # ty: ignore[unresolved-import]
 
     session_factory = async_sessionmaker(
         db_engine, expire_on_commit=False, class_=AsyncSession
@@ -69,7 +69,7 @@ async def async_client(
 @pytest.fixture(autouse=True)
 def _reset_ws_manager() -> None:
     """Clear WebSocket connections before each test."""
-    from app.mqtt_client import manager
+    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
 
     manager.active_connections.clear()
 
@@ -79,7 +79,7 @@ async def seed_data(db_session: AsyncSession) -> None:
     """Insert sample readings into the test database."""
     from datetime import UTC, datetime, timedelta
 
-    from app.models import WeatherReading
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     now = datetime.now(UTC)
     samples = [

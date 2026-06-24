@@ -43,8 +43,8 @@ async def test_cleanup_old_readings(monkeypatch, db_engine) -> None:
     import asyncio
     from contextlib import suppress
 
-    from app.main import cleanup_old_readings
-    from app.models import WeatherReading
+    from app.main import cleanup_old_readings  # ty: ignore[unresolved-import]
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -95,8 +95,8 @@ async def test_cleanup_keeps_recent_readings(monkeypatch, db_engine) -> None:
     import asyncio
     from contextlib import suppress
 
-    from app.main import cleanup_old_readings
-    from app.models import WeatherReading
+    from app.main import cleanup_old_readings  # ty: ignore[unresolved-import]
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

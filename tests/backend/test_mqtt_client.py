@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 def test_topic_parameter_map_contains_known_sensors() -> None:
     """TOPIC_PARAMETER_MAP includes all configured sensor topics."""
-    from app.mqtt_client import TOPIC_PARAMETER_MAP
+    from app.mqtt_client import TOPIC_PARAMETER_MAP  # ty: ignore[unresolved-import]
 
     assert "weather-dashboard/temperature" in TOPIC_PARAMETER_MAP
     assert TOPIC_PARAMETER_MAP["weather-dashboard/temperature"] == "temperature"
@@ -18,7 +18,7 @@ def test_topic_parameter_map_contains_known_sensors() -> None:
 
 def test_topic_parameter_map_unknown_topic() -> None:
     """TOPIC_PARAMETER_MAP does not contain topics not in config."""
-    from app.mqtt_client import TOPIC_PARAMETER_MAP
+    from app.mqtt_client import TOPIC_PARAMETER_MAP  # ty: ignore[unresolved-import]
 
     assert "weather-dashboard/unknown" not in TOPIC_PARAMETER_MAP
 
@@ -28,7 +28,7 @@ class TestWebSocketManager:
 
     async def test_connect_adds_connection(self) -> None:
         """Connect should accept the websocket and add it to active_connections."""
-        from app.mqtt_client import WebSocketManager
+        from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
 
         manager = WebSocketManager()
         ws = AsyncMock()
@@ -38,7 +38,7 @@ class TestWebSocketManager:
 
     async def test_disconnect_removes_connection(self) -> None:
         """Disconnect should remove the websocket from active_connections."""
-        from app.mqtt_client import WebSocketManager
+        from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
 
         manager = WebSocketManager()
         ws = AsyncMock()
@@ -48,7 +48,7 @@ class TestWebSocketManager:
 
     async def test_broadcast_sends_to_all(self) -> None:
         """Broadcast should send the JSON message to every connected client."""
-        from app.mqtt_client import WebSocketManager
+        from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
 
         manager = WebSocketManager()
         ws1 = AsyncMock()
@@ -64,7 +64,7 @@ class TestWebSocketManager:
 
     async def test_broadcast_removes_dead_connections(self) -> None:
         """Broadcast should remove clients whose send_text raises an exception."""
-        from app.mqtt_client import WebSocketManager
+        from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
 
         manager = WebSocketManager()
         good_ws = AsyncMock()
@@ -94,7 +94,7 @@ async def test_process_numeric_message(monkeypatch, db_engine) -> None:
     message.topic.__str__ = MagicMock(return_value="weather-dashboard/temperature")
     message.payload = json.dumps({"value": 22.5, "unit": "°C"}).encode()
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     await _process_mqtt_message(message)
 
@@ -126,7 +126,7 @@ async def test_process_condition_message(monkeypatch, db_engine) -> None:
         {"value": "sunny", "icon": "mdi:weather-sunny"}
     ).encode()
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     await _process_mqtt_message(message)
 
@@ -158,7 +158,7 @@ async def test_process_text_message(monkeypatch, db_engine) -> None:
     message.topic.__str__ = MagicMock(return_value="weather-dashboard/air_quality")
     message.payload = json.dumps({"value": "bardzo dobra"}).encode()
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     await _process_mqtt_message(message)
 
@@ -193,7 +193,7 @@ async def test_process_unknown_topic_logs_warning(
     message.topic.__str__ = MagicMock(return_value="weather-dashboard/unknown_sensor")
     message.payload = json.dumps({"value": 22.5}).encode()
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     with caplog.at_level(logging.WARNING):
         await _process_mqtt_message(message)
@@ -222,7 +222,7 @@ async def test_process_invalid_json_logs_warning(
     message.topic.__str__ = MagicMock(return_value="weather-dashboard/temperature")
     message.payload = b"not-json"
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     with caplog.at_level(logging.WARNING):
         await _process_mqtt_message(message)
@@ -252,7 +252,7 @@ async def test_process_missing_value_logs_warning(
     message.topic.__str__ = MagicMock(return_value="weather-dashboard/temperature")
     message.payload = json.dumps({"unit": "°C"}).encode()
 
-    from app.mqtt_client import _process_mqtt_message
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
 
     with caplog.at_level(logging.WARNING):
         await _process_mqtt_message(message)
@@ -276,11 +276,11 @@ async def test_process_numeric_broadcasts(monkeypatch, db_engine) -> None:
     )
     monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
 
-    from app.mqtt_client import WebSocketManager
+    from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
 
     ws = AsyncMock()
 
-    import app.mqtt_client as mqtt_mod
+    import app.mqtt_client as mqtt_mod  # ty: ignore[unresolved-import]
 
     original_manager = mqtt_mod.manager
     test_manager = WebSocketManager()

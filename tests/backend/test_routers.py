@@ -47,7 +47,7 @@ async def test_get_current_with_data(async_client, seed_data) -> None:
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_get_history(async_client, db_session) -> None:
     """GET /api/weather/history/{param} filters by hours and returns ordered results."""
-    from app.models import WeatherReading
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     now = datetime.now(UTC)
     import datetime as dt
