@@ -375,3 +375,27 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+export {
+  getConditionSvgPath,
+  formatTimestamp,
+  formatUpdated,
+  resolveIcon,
+  getCssVar,
+  flashValue,
+  createCard,
+  createChart,
+  updateChartTheme,
+  updateCard,
+  appendChartPoint,
+  loadHistory,
+  connectWebSocket,
+  initThemeToggle,
+  loadSensors,
+  init,
+  charts,
+  sensorsConfig,
+  API_BASE,
+  HISTORY_HOURS,
+  MAX_CHART_POINTS,
+};
