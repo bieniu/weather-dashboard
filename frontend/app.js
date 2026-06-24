@@ -91,7 +91,7 @@ function flashValue(element, color) {
 function createCard(sensorKey, sensor, index) {
   const card = document.createElement("article");
   card.className = "weather-card";
-  card.id = `card-${sensorKey}`;
+  card.id = `card-${sensorKey.replace(/_/g, "-")}`;
   card.style.setProperty("--card-index", index);
   card.style.setProperty("--sensor-color", sensor.color);
 

@@ -327,12 +327,12 @@ body {
 }
 
 #card-condition,
-#card-air_quality {
+#card-air-quality {
   gap: 0;
 }
 
 #card-condition .weather-card__updated,
-#card-air_quality .weather-card__updated {
+#card-air-quality .weather-card__updated {
   margin: 0;
   margin-top: -13px;
 }
