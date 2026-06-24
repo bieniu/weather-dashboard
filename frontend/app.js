@@ -26,18 +26,18 @@ const MDI_TO_KEY = {
 
 const SVG_FILE = {
   "clear-night": "clear-night.svg",
-  "cloudy": "cloudy.svg",
-  "exceptional": "exceptional.svg",
-  "fog": "fog.svg",
-  "hail": "hail.svg",
-  "lightning": "lightning.svg",
+  cloudy: "cloudy.svg",
+  exceptional: "exceptional.svg",
+  fog: "fog.svg",
+  hail: "hail.svg",
+  lightning: "lightning.svg",
   "lightning-rainy": "lightning-rainy.svg",
-  "pouring": "pouring.svg",
-  "rainy": "rainy.svg",
-  "snowy": "snowy.svg",
+  pouring: "pouring.svg",
+  rainy: "rainy.svg",
+  snowy: "snowy.svg",
   "snowy-rainy": "snowy-rainy.svg",
-  "sunny": "sunny.svg",
-  "windy": "windy.svg",
+  sunny: "sunny.svg",
+  windy: "windy.svg",
   "windy-variant": "windy-variant.svg",
 };
 
@@ -78,11 +78,14 @@ function getCssVar(name) {
 
 function flashValue(element, color) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  element.animate([
-    { backgroundColor: "transparent" },
-    { backgroundColor: color + "22", offset: 0.3 },
-    { backgroundColor: "transparent" }
-  ], { duration: 600, easing: "ease-out" });
+  element.animate(
+    [
+      { backgroundColor: "transparent" },
+      { backgroundColor: color + "22", offset: 0.3 },
+      { backgroundColor: "transparent" },
+    ],
+    { duration: 600, easing: "ease-out" },
+  );
 }
 
 function createCard(sensorKey, sensor, index) {
@@ -130,16 +133,18 @@ function createChart(canvasId, parameter, color, decimals, unit) {
   return new Chart(ctx, {
     type: "line",
     data: {
-      datasets: [{
-        data: [],
-        borderColor: color,
-        backgroundColor: color + "22",
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        tension: 0.3,
-        fill: true,
-      }]
+      datasets: [
+        {
+          data: [],
+          borderColor: color,
+          backgroundColor: color + "22",
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.3,
+          fill: true,
+        },
+      ],
     },
     options: {
       responsive: true,
@@ -152,8 +157,8 @@ function createChart(canvasId, parameter, color, decimals, unit) {
           callbacks: {
             label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)} ${unit}`,
             title: (items) => formatTimestamp(items[0].raw.x),
-          }
-        }
+          },
+        },
       },
       scales: {
         x: {
@@ -164,30 +169,30 @@ function createChart(canvasId, parameter, color, decimals, unit) {
             font: { family: "JetBrains Mono", size: 11 },
             color: getCssVar("--color-text-secondary"),
             maxTicksLimit: 6,
-          }
+          },
         },
         y: {
           grid: { color: getCssVar("--color-border") },
           ticks: {
             font: { family: "JetBrains Mono", size: 11 },
             color: getCssVar("--color-text-secondary"),
-            callback: function(value) {
+            callback: function (value) {
               return Number(value).toFixed(decimals);
             },
           },
           afterFit(scale) {
             scale.width = 52;
           },
-        }
-      }
-    }
+        },
+      },
+    },
   });
 }
 
 function updateChartTheme() {
   const border = getCssVar("--color-border");
   const tick = getCssVar("--color-text-secondary");
-  Object.values(charts).forEach(c => {
+  Object.values(charts).forEach((c) => {
     c.options.scales.x.grid.color = border;
     c.options.scales.y.grid.color = border;
     c.options.scales.x.ticks.color = tick;
@@ -261,7 +266,7 @@ async function loadHistory(parameter) {
 
     const chart = charts[parameter];
     if (!chart) return;
-    chart.data.datasets[0].data = history.map(r => ({
+    chart.data.datasets[0].data = history.map((r) => ({
       x: new Date(r.timestamp),
       y: r.value,
     }));
@@ -315,8 +320,7 @@ function initThemeToggle() {
   const updateIcon = () => {
     btn.querySelector(".material-symbols-rounded").textContent =
       theme === "dark" ? "light_mode" : "dark_mode";
-    btn.setAttribute("aria-label",
-      theme === "dark" ? "Włącz jasny motyw" : "Włącz ciemny motyw");
+    btn.setAttribute("aria-label", theme === "dark" ? "Włącz jasny motyw" : "Włącz ciemny motyw");
   };
   updateIcon();
 
@@ -348,9 +352,7 @@ async function init() {
     idx++;
   }
 
-  await Promise.all(
-    Object.keys(sensorsConfig).map(key => loadHistory(key))
-  );
+  await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   connectWebSocket();
 }

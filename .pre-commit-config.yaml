@@ -31,6 +31,27 @@ repos:
           - --no-sort-keys
           - --indent=4
           - --autofix
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.24.0
+    hooks:
+      - id: eslint
+        args: [--config, eslint.config.js]
+        files: \.(js|mjs)$
+        additional_dependencies:
+          - '@eslint/js'
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        args: [--check]
+        files: \.(js|css|html|json)$
+  - repo: https://github.com/pre-commit/mirrors-stylelint
+    rev: v16.18.0
+    hooks:
+      - id: stylelint
+        files: \.(css)$
+        additional_dependencies:
+          - stylelint-config-standard
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
