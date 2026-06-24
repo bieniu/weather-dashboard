@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 def test_from_attributes() -> None:
     """WeatherReadingOut can be created from an ORM WeatherReading instance."""
-    from app.models import WeatherReading
-    from app.schemas import WeatherReadingOut
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
 
     orm = WeatherReading(
         id=42,
@@ -24,7 +24,7 @@ def test_from_attributes() -> None:
 
 def test_serialize_naive_timestamp_adds_utc() -> None:
     """A naive datetime gets UTC timezone attached during serialization."""
-    from app.schemas import WeatherReadingOut
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
 
     data = WeatherReadingOut(
         id=1,
@@ -39,7 +39,7 @@ def test_serialize_naive_timestamp_adds_utc() -> None:
 
 def test_serialize_utc_timestamp_stays_utc() -> None:
     """A UTC-aware datetime is serialised correctly with +00:00 offset."""
-    from app.schemas import WeatherReadingOut
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
 
     dt = datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
     data = WeatherReadingOut(
@@ -55,7 +55,7 @@ def test_serialize_utc_timestamp_stays_utc() -> None:
 
 def test_condition_fields_nullable() -> None:
     """Condition readings serialise value=None, value_str and icon present."""
-    from app.schemas import WeatherReadingOut
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
 
     data = WeatherReadingOut(
         id=3,
