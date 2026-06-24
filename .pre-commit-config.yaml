@@ -31,13 +31,33 @@ repos:
           - --no-sort-keys
           - --indent=4
           - --autofix
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.24.0
+    hooks:
+      - id: eslint
+        args: [--config, eslint.config.js]
+        files: \.(js|mjs)$
+        additional_dependencies:
+          - eslint@9.24.0
+          - '@eslint/js'
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/.*\.(js|css|html)$
+  - repo: https://github.com/thibaudcolas/pre-commit-stylelint
+    rev: v17.6.0
+    hooks:
+      - id: stylelint
+        files: \.(css)$
+        additional_dependencies:
+          - stylelint@16.26.1
+          - stylelint-config-standard
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=hass,alot,datas,dof,dur,ether,farenheit,hist,iff,ines,ist,lightsensor,mut,nd,pres,referer,ser,serie,te,technik,ue,uint,visability,wan,wanna,withing,iam,incomfort,ba,wel,hel
-          - --skip="./.*,*.csv,*.json"
+          - --skip="./.*"
           - --quiet-level=2
         exclude_types: [csv, json]
-        exclude: ^tests/fixtures/|^tests/snapshots/

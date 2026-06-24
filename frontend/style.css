@@ -2,19 +2,19 @@
    Design tokens — theme light / dark
    ============================================= */
 :root {
-  --color-bg: #F1F5F9;
-  --color-surface: #FFFFFF;
-  --color-text: #0F172A;
-  --color-text-secondary: #64748B;
-  --color-border: #E2E8F0;
-  --color-accent: #F59E0B;
-  --color-accent-subtle: #FEF3C7;
-  --color-success: #16A34A;
-  --color-error: #DC2626;
+  --color-bg: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-border: #e2e8f0;
+  --color-accent: #f59e0b;
+  --color-accent-subtle: #fef3c7;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
 
-  --font-display: 'Sora', sans-serif;
-  --font-body: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: "Sora", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
 
   --header-h: 56px;
   --grid-gap: 16px;
@@ -23,21 +23,27 @@
 }
 
 [data-theme="dark"] {
-  --color-bg: #0F172A;
-  --color-surface: #1E293B;
-  --color-text: #F8FAFC;
-  --color-text-secondary: #94A3B8;
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #f8fafc;
+  --color-text-secondary: #94a3b8;
   --color-border: #334155;
-  --color-accent: #F59E0B;
-  --color-accent-subtle: #78350F;
-  --color-success: #22C55E;
-  --color-error: #EF4444;
+  --color-accent: #f59e0b;
+  --color-accent-subtle: #78350f;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
 }
 
 /* =============================================
    Reset
    ============================================= */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 html {
   -webkit-text-size-adjust: none;
@@ -52,7 +58,9 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   min-height: 100dvh;
-  transition: background 0.3s ease, color 0.3s ease;
+  transition:
+    background 0.3s ease,
+    color 0.3s ease;
 }
 
 /* =============================================
@@ -64,7 +72,9 @@ body {
   z-index: 100;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  transition: background 0.3s ease, border-color 0.3s ease;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .header__inner {
@@ -126,8 +136,15 @@ body {
 }
 
 @keyframes live-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
 }
 
 /* =============================================
@@ -144,7 +161,10 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--color-text-secondary);
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .theme-btn:hover {
@@ -188,7 +208,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: background 0.3s ease, border-color 0.3s ease;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
   opacity: 0;
   transform: translateY(16px);
   animation: card-enter 0.5s ease-out forwards;
@@ -196,7 +218,10 @@ body {
 }
 
 @keyframes card-enter {
-  to { opacity: 1; transform: translateY(0); }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .weather-card:hover {
@@ -267,7 +292,9 @@ body {
    Reduced motion
    ============================================= */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
