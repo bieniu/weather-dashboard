@@ -3,9 +3,9 @@
 import io
 import os
 import re
-from PIL import Image
 
 import cairosvg
+from PIL import Image
 
 SRC = os.path.join(os.path.dirname(__file__), "new_icon.svg")
 OUT_DIR = os.path.join(os.path.dirname(__file__), "frontend", "icons")
@@ -21,9 +21,7 @@ def read_svg(path):
 
 
 def remove_youtube_script(content):
-    return re.sub(
-        r'<script[^>]*>.*?</script>', "", content, flags=re.DOTALL
-    )
+    return re.sub(r"<script[^>]*>.*?</script>", "", content, flags=re.DOTALL)
 
 
 def modify_svg_for_png(content):
@@ -106,20 +104,18 @@ def extract_visual_elements(svg_content):
     content = remove_youtube_script(svg_content)
 
     # Extract defs
-    defs_match = re.search(r'(<defs>.*?</defs>)', content, re.DOTALL)
+    defs_match = re.search(r"(<defs>.*?</defs>)", content, re.DOTALL)
     defs_content = defs_match.group(1) if defs_match else ""
 
     # Extract all visual elements inside the clip-path group (skip the clip-path attr)
     # Remove the outer g with clip-path, keep everything inside it
     inner_match = re.search(
-        r'<g[^>]*clip-path="[^"]*"[^>]*>(.*?)</g>\s*<defs',
-        content, re.DOTALL
+        r'<g[^>]*clip-path="[^"]*"[^>]*>(.*?)</g>\s*<defs', content, re.DOTALL
     )
     if not inner_match:
         # Try without defs immediately after
         inner_match = re.search(
-            r'<g[^>]*clip-path="[^"]*"[^>]*>(.*?)</g>',
-            content, re.DOTALL
+            r'<g[^>]*clip-path="[^"]*"[^>]*>(.*?)</g>', content, re.DOTALL
         )
 
     inner_content = inner_match.group(1) if inner_match else content
@@ -135,7 +131,8 @@ def extract_visual_elements(svg_content):
     for nid in needed_ids:
         grad_match = re.search(
             rf'<linearGradient[^>]*id="{re.escape(nid)}"[^>]*>.*?</linearGradient>',
-            defs_content, re.DOTALL
+            defs_content,
+            re.DOTALL,
         )
         if grad_match:
             defs_only += grad_match.group(0)
@@ -158,12 +155,12 @@ def create_favicon(svg_content):
 
     favicon = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">\n'
-        f'{defs}\n'
+        f"{defs}\n"
         f'  <rect width="24" height="24" rx="5" fill="url(#fav-bg)"/>\n'
         f'  <g transform="scale(0.1875)">\n'
-        f'{inner}\n'
-        f'  </g>\n'
-        f'</svg>'
+        f"{inner}\n"
+        f"  </g>\n"
+        f"</svg>"
     )
     return favicon
 

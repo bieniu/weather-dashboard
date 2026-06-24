@@ -28,10 +28,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Lint
+      - name: Lint Python
         run: uv run ruff check backend
 
-      - name: Check format
+      - name: Check formatting
         run: uv run ruff format --check backend
 
       - name: Check types
