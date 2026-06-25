@@ -22,7 +22,7 @@ class SensorConfig(BaseModel):
 
     name: str
     icon: str = ""
-    color: str
+    color: str | None = None
     type: str = "numeric"
     round: int = 1
     unit: str = ""

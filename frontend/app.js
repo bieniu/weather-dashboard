@@ -76,24 +76,14 @@ function getCssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function flashValue(element, color) {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  element.animate(
-    [
-      { backgroundColor: "transparent" },
-      { backgroundColor: color + "22", offset: 0.3 },
-      { backgroundColor: "transparent" },
-    ],
-    { duration: 600, easing: "ease-out" },
-  );
-}
-
 function createCard(sensorKey, sensor, index) {
   const card = document.createElement("article");
   card.className = "weather-card";
   card.id = `card-${sensorKey.replace(/_/g, "-")}`;
   card.style.setProperty("--card-index", index);
-  card.style.setProperty("--sensor-color", sensor.color);
+  if (sensor.color) {
+    card.style.setProperty("--sensor-color", sensor.color);
+  }
 
   if (sensor.type === "condition" || sensor.type === "text") {
     const iconFile = sensorKey.replace(/_/g, "-");
@@ -219,7 +209,6 @@ function updateCard(parameter, value, unit, timestamp, icon) {
     const updatedEl = document.getElementById(`${parameter}-updated`);
     if (valueEl) {
       valueEl.textContent = value ?? "—";
-      flashValue(valueEl, sensor.color);
     }
     if (value) {
       const conditionKey = icon || value;
@@ -238,7 +227,6 @@ function updateCard(parameter, value, unit, timestamp, icon) {
     const updatedEl = document.getElementById(`${parameter}-updated`);
     if (valueEl) {
       valueEl.textContent = value ?? "—";
-      flashValue(valueEl, sensor.color);
     }
     if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
   } else {
@@ -249,7 +237,6 @@ function updateCard(parameter, value, unit, timestamp, icon) {
     const decimals = sensor.round ?? 1;
     if (valueEl) {
       valueEl.textContent = Number(value).toFixed(decimals);
-      flashValue(valueEl, sensor.color);
     }
     if (unitEl) unitEl.textContent = unit;
     if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
@@ -382,7 +369,6 @@ export {
   formatUpdated,
   resolveIcon,
   getCssVar,
-  flashValue,
   createCard,
   createChart,
   updateChartTheme,
