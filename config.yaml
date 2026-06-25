@@ -4,11 +4,9 @@ sensors:
   condition:
     type: condition
     name: Obecne warunki
-    color: "#FFB300"
   air_quality:
     type: text
     name: Jakość powietrza
-    color: "#607D8B"
   temperature:
     name: Temperatura
     icon: mdi:thermometer
