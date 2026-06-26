@@ -308,6 +308,23 @@ describe("loadHistory", () => {
     await loadHistory("temperature");
     expect(charts.temperature.data.datasets[0].data).toHaveLength(0);
   });
+
+  it("uses per-sensor history_hours when configured in sensor config", async () => {
+    sensorsConfig.water_level = { name: "Woda", type: "numeric", icon: "mdi:waves", color: "#2196F3", round: 0, unit: "cm", history_hours: 48 };
+    charts.water_level = {
+      data: { datasets: [{ data: [] }] },
+      update: vi.fn(),
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+
+    await loadHistory("water_level");
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/history/water_level?hours=48`);
+    delete charts.water_level;
+    delete sensorsConfig.water_level;
+  });
 });
 
 describe("connectWebSocket", () => {

@@ -245,12 +245,12 @@ function appendChartPoint(parameter, value, timestamp) {
 
 async function loadHistory(parameter) {
   try {
-    const hours = sensor.history_hours ?? HISTORY_HOURS;
+    const sensor = sensorsConfig[parameter];
+    const hours = sensor?.history_hours ?? HISTORY_HOURS;
     const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
 
-    const sensor = sensorsConfig[parameter];
     if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
         const last = history[history.length - 1];

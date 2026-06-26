@@ -108,3 +108,6 @@ async def test_get_sensors_structure(async_client) -> None:
         assert "icon" in sensor
         assert "color" in sensor
         assert "type" in sensor
+        assert "history_hours" in sensor
+    assert data["water_level"]["history_hours"] == 48
+    assert data["temperature"]["history_hours"] == 24

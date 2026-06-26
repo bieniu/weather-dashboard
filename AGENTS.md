@@ -45,9 +45,11 @@ docker compose up
 
 ## Testing
 
+### Backend (pytest)
+
 ```bash
 uv sync --group test       # install test deps (run from root)
-pytest tests/backend -v    # run all tests (run from root)
+pytest tests/backend -v    # run all backend tests (run from root)
 pytest tests/backend -v --timeout=10 -k "test_mqtt"  # filter by name
 ```
 
@@ -57,6 +59,36 @@ pytest tests/backend -v --timeout=10 -k "test_mqtt"  # filter by name
 - **Time:** `freezegun` for freezing `datetime.now(UTC)`
 - **WebSocket:** tested via `WebSocketManager` unit tests; endpoint test skipped (needs live ASGI)
 - **HTTP client:** `httpx.AsyncClient` with `ASGITransport` and `get_db` overridden to test engine
+
+### Frontend (vitest)
+
+```bash
+npm test       # run all frontend tests with coverage (run from root)
+```
+
+- **Framework:** vitest (4.x) + happy-dom + @vitest/coverage-v8
+- **Config:** `vitest.config.js` in root
+- **Setup:** `tests/frontend/setup.js` — mocks Chart.js, canvas, matchMedia, DOM structure
+- **Coverage:** always collected via `--coverage`; check uncovered lines for missing test coverage
+
+### Linting & type checking
+
+```bash
+ruff check backend       # ruff lint (from root)
+ruff format backend      # ruff format (from root)
+ty check backend         # type checking (from root)
+prek run --all-files     # pre-commit wrapper
+```
+
+### After every implementation
+
+Always verify correctness by running **all** these before committing:
+
+```bash
+ruff check backend && ty check backend && pytest tests/backend -v --timeout=10 && npm test
+```
+
+Failing any of these must be fixed before the implementation is complete.
 
 ### Test files (`tests/backend/`)
 
