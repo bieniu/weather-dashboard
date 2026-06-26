@@ -100,6 +100,13 @@ class CSPMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
 
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    """Health check endpoint for Docker."""
+    return {"status": "ok"}
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
