@@ -58,75 +58,48 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
     if parameter is None:
         return  # unknown topic — ignore
 
+    sensor_type = settings.sensors[parameter].type
+    is_string = sensor_type in {"condition", "text"}
+    now = datetime.now(UTC)
+
     try:
         payload = json.loads(message.payload)
-    except json.JSONDecodeError as e:
-        logger.warning("Payload parse error on topic %s: %s", topic, e)
-        return
-
-    sensor_config = settings.sensors.get(parameter)
-    is_condition = sensor_config and sensor_config.type == "condition"
-    is_text = sensor_config and sensor_config.type == "text"
-
-    try:
-        if is_condition:
+        if is_string:
             value_str = str(payload["value"])
-            icon = str(payload.get("icon", ""))
-        elif is_text:
-            value_str = str(payload["value"])
-            icon = ""
+            icon = str(payload.get("icon", "")) if sensor_type == "condition" else ""
+            reading = WeatherReading(
+                parameter=parameter, value_str=value_str, icon=icon, timestamp=now
+            )
         else:
             value = float(payload["value"])
             unit = str(payload["unit"])
-    except (KeyError, ValueError) as e:
+            reading = WeatherReading(
+                parameter=parameter, value=value, unit=unit, timestamp=now
+            )
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
         logger.warning("Payload parse error on topic %s: %s", topic, e)
         return
 
-    is_string_type = is_condition or is_text
-
-    # Save to database
     async with SessionLocal() as db:
-        if is_string_type:
-            reading = WeatherReading(
-                parameter=parameter,
-                value=None,
-                unit="",
-                value_str=value_str,
-                icon=icon,
-                timestamp=datetime.now(UTC),
-            )
-        else:
-            reading = WeatherReading(
-                parameter=parameter,
-                value=value,
-                unit=unit,
-                timestamp=datetime.now(UTC),
-            )
         db.add(reading)
         await db.commit()
-        await db.refresh(reading)
 
-        # SQLite strips timezone info on read — re-attach UTC
-        if reading.timestamp.tzinfo is None:
-            reading.timestamp = reading.timestamp.replace(tzinfo=UTC)
-
-    # Broadcast to frontend via WebSocket
-    if is_string_type:
-        broadcast_data = {
+    if is_string:
+        data: dict[str, object] = {
             "parameter": parameter,
             "value": value_str,
-            "timestamp": reading.timestamp.isoformat(),
+            "timestamp": now.isoformat(),
         }
-        if is_condition:
-            broadcast_data["icon"] = icon
-        await manager.broadcast(broadcast_data)
+        if sensor_type == "condition":
+            data["icon"] = icon
+        await manager.broadcast(data)
     else:
         await manager.broadcast(
             {
                 "parameter": parameter,
                 "value": value,
                 "unit": unit,
-                "timestamp": reading.timestamp.isoformat(),
+                "timestamp": now.isoformat(),
             }
         )
 

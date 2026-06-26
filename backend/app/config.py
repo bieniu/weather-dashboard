@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 def _load_config_yaml() -> dict:
-    with (ROOT_DIR / "config.yaml").open() as f:
+    with (ROOT_DIR / "config.yaml").open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
