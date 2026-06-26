@@ -182,6 +182,21 @@ describe("updateCard", () => {
     delete sensorsConfig.text_sensor;
   });
 
+  it("hides icon-img and shows fallback when condition value is falsy", () => {
+    sensorsConfig.condition = SENSOR_CONDITION.condition;
+    const card = createCard("condition", SENSOR_CONDITION.condition, 0);
+    document.getElementById("weather-grid").appendChild(card);
+    const img = document.getElementById("condition-icon-img");
+    const fallback = document.getElementById("condition-icon-fallback");
+    img.classList.remove("weather-card__icon--hidden");
+    fallback.classList.add("weather-card__icon--hidden");
+
+    updateCard("condition", null, null, "2025-06-24T14:30:00Z", "mdi:weather-sunny");
+    expect(img.classList.contains("weather-card__icon--hidden")).toBe(true);
+    expect(fallback.classList.contains("weather-card__icon--hidden")).toBe(false);
+    delete sensorsConfig.condition;
+  });
+
   it("does nothing when sensor not in config", () => {
     updateCard("nonexistent", 42, null, "2025-06-24T14:30:00Z");
   });
