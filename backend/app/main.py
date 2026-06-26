@@ -98,6 +98,24 @@ class CSPMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class CacheControlMiddleware(BaseHTTPMiddleware):
+    """Prevent caching of HTML/JS files so updates are picked up immediately."""
+
+    _NO_CACHE = frozenset({".html", ".js", ".css", ".json"})
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Add no-cache header for HTML/JS/CSS/JSON responses."""
+        response: Response = await call_next(request)
+        path = request.url.path
+        if any(path.endswith(ext) for ext in self._NO_CACHE):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
 app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
 
 app.add_middleware(
@@ -109,6 +127,7 @@ app.add_middleware(
 app.add_middleware(CloudflareIPMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(CSPMiddleware)
+app.add_middleware(CacheControlMiddleware)
 
 app.include_router(weather_router)
 
