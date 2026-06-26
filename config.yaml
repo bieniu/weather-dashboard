@@ -55,3 +55,4 @@ sensors:
     color: "#2196F3"
     round: 0
     unit: cm
+    history_hours: 48

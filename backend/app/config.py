@@ -26,6 +26,7 @@ class SensorConfig(BaseModel):
     type: str = "numeric"
     round: int = 1
     unit: str = ""
+    history_hours: int = 24
 
 
 class Settings(BaseSettings):
