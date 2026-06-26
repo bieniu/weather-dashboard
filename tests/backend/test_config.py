@@ -2,13 +2,14 @@
 
 
 def test_sensor_config_defaults() -> None:
-    """SensorConfig applies default type='numeric', round=1, unit=''."""
+    """SensorConfig applies default type, round, unit, history_hours."""
     from app.config import SensorConfig  # ty: ignore[unresolved-import]
 
     config = SensorConfig(name="Test", icon="mdi:test", color="#000")
     assert config.type == "numeric"
     assert config.round == 1
     assert config.unit == ""
+    assert config.history_hours == 24
 
 
 def test_sensor_config_explicit() -> None:
@@ -22,10 +23,12 @@ def test_sensor_config_explicit() -> None:
         type="numeric",
         round=0,
         unit="hPa",
+        history_hours=48,
     )
     assert config.name == "Pressure"
     assert config.round == 0
     assert config.unit == "hPa"
+    assert config.history_hours == 48
 
 
 def test_settings_loads_sensors() -> None:

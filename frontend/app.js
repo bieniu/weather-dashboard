@@ -118,7 +118,7 @@ function createCard(sensorKey, sensor, index) {
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
       <div class="weather-card__chart">
-        <canvas id="chart-${sensorKey}" aria-label="${sensor.name} — wykres z ostatnich ${HISTORY_HOURS} godzin" role="img"></canvas>
+        <canvas id="chart-${sensorKey}" aria-label="${sensor.name} — wykres z ostatnich ${sensor.history_hours ?? HISTORY_HOURS} godzin" role="img"></canvas>
       </div>
     `;
   }
@@ -245,11 +245,12 @@ function appendChartPoint(parameter, value, timestamp) {
 
 async function loadHistory(parameter) {
   try {
-    const res = await fetch(`${API_BASE}/history/${parameter}?hours=${HISTORY_HOURS}`);
+    const sensor = sensorsConfig[parameter];
+    const hours = sensor?.history_hours ?? HISTORY_HOURS;
+    const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
 
-    const sensor = sensorsConfig[parameter];
     if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
         const last = history[history.length - 1];
