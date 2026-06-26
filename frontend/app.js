@@ -204,42 +204,32 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   const sensor = sensorsConfig[parameter];
   if (!sensor) return;
 
+  const valueEl = document.getElementById(`${parameter}-value`);
+  const updatedEl = document.getElementById(`${parameter}-updated`);
+  if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
+
+  if (sensor.type === "condition" || sensor.type === "text") {
+    if (valueEl) valueEl.textContent = value ?? "—";
+  } else {
+    if (valueEl) valueEl.textContent = Number(value).toFixed(sensor.round ?? 1);
+    const unitEl = document.getElementById(`${parameter}-unit`);
+    if (unitEl) unitEl.textContent = unit;
+  }
+
   if (sensor.type === "condition") {
-    const valueEl = document.getElementById(`${parameter}-value`);
-    const updatedEl = document.getElementById(`${parameter}-updated`);
-    if (valueEl) {
-      valueEl.textContent = value ?? "—";
-    }
+    const img = document.getElementById(`${parameter}-icon-img`);
+    const fallback = document.getElementById(`${parameter}-icon-fallback`);
     if (value) {
-      const conditionKey = icon || value;
-      const img = document.getElementById(`${parameter}-icon-img`);
       if (img) {
-        img.src = getConditionSvgPath(conditionKey);
+        img.src = getConditionSvgPath(icon || value);
         img.alt = value;
         img.classList.remove("weather-card__icon--hidden");
       }
-      const fallback = document.getElementById(`${parameter}-icon-fallback`);
       if (fallback) fallback.classList.add("weather-card__icon--hidden");
+    } else {
+      if (img) img.classList.add("weather-card__icon--hidden");
+      if (fallback) fallback.classList.remove("weather-card__icon--hidden");
     }
-    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
-  } else if (sensor.type === "text") {
-    const valueEl = document.getElementById(`${parameter}-value`);
-    const updatedEl = document.getElementById(`${parameter}-updated`);
-    if (valueEl) {
-      valueEl.textContent = value ?? "—";
-    }
-    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
-  } else {
-    const valueEl = document.getElementById(`${parameter}-value`);
-    const unitEl = document.getElementById(`${parameter}-unit`);
-    const updatedEl = document.getElementById(`${parameter}-updated`);
-
-    const decimals = sensor.round ?? 1;
-    if (valueEl) {
-      valueEl.textContent = Number(value).toFixed(decimals);
-    }
-    if (unitEl) unitEl.textContent = unit;
-    if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
   }
 }
 
