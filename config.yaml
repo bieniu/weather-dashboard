@@ -37,14 +37,14 @@ sensors:
     color: "#607D8B"
     round: 0
     unit: µg/m³
-  pm10:
-    name: Pył zawieszony PM10
+  pm25:
+    name: Pył zawieszony PM2.5
     icon: mdi:air
     color: "#607D8B"
     round: 0
     unit: µg/m³
-  pm25:
-    name: Pył zawieszony PM25
+  pm10:
+    name: Pył zawieszony PM10
     icon: mdi:air
     color: "#607D8B"
     round: 0
