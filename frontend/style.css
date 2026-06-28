@@ -319,7 +319,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 0;
-  margin-top: -11px;
+  margin-top: -9px;
 }
 
 .weather-card__header--condition {
@@ -334,7 +334,7 @@ body {
 #card-condition .weather-card__updated,
 #card-air-quality .weather-card__updated {
   margin: 0;
-  margin-top: -13px;
+  margin-top: -8px;
 }
 
 .weather-card__icon--img {
