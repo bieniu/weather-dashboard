@@ -340,7 +340,7 @@ async function initAnalytics() {
     const { host, id } = await res.json();
     if (host && id) {
       const s = document.createElement("script");
-      s.src = `${host}/script.js`;
+      s.src = `${host.replace(/\/+$/, "")}/script.js`;
       s.dataset.websiteId = id;
       s.defer = true;
       document.head.appendChild(s);
@@ -351,7 +351,6 @@ async function initAnalytics() {
 }
 
 async function init() {
-  await initAnalytics();
   initThemeToggle();
   sensorsConfig = await loadSensors();
   const grid = document.getElementById("weather-grid");
@@ -368,6 +367,7 @@ async function init() {
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   connectWebSocket();
+  initAnalytics();
 }
 
 document.addEventListener("DOMContentLoaded", init);

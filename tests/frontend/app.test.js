@@ -15,6 +15,7 @@ import {
   connectWebSocket,
   initThemeToggle,
   loadSensors,
+  initAnalytics,
   init,
   charts,
   sensorsConfig,
@@ -411,6 +412,74 @@ describe("loadSensors", () => {
   it("throws on HTTP error", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     await expect(loadSensors()).rejects.toThrow("Failed to load sensors: HTTP 500");
+  });
+});
+
+describe("initAnalytics", () => {
+  beforeEach(() => {
+    document.head.querySelectorAll("script").forEach((s) => {
+      if (s.src.includes("script.js")) s.remove();
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("injects script tag when host and id are returned", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ host: "https://umami.example.com", id: "abc-123" }),
+    });
+
+    await initAnalytics();
+    const scripts = document.head.querySelectorAll("script");
+    const injected = Array.from(scripts).find((s) => s.src.includes("script.js"));
+    expect(injected).toBeTruthy();
+    expect(injected.src).toBe("https://umami.example.com/script.js");
+    expect(injected.dataset.websiteId).toBe("abc-123");
+    expect(injected.defer).toBe(true);
+  });
+
+  it("normalizes trailing slash in host", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ host: "https://umami.example.com/", id: "abc-123" }),
+    });
+
+    await initAnalytics();
+    const scripts = document.head.querySelectorAll("script");
+    const injected = Array.from(scripts).find((s) => s.src.includes("script.js"));
+    expect(injected).toBeTruthy();
+    expect(injected.src).toBe("https://umami.example.com/script.js");
+  });
+
+  it("does nothing when response has no host/id", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
+    const originalLength = document.head.querySelectorAll("script").length;
+
+    await initAnalytics();
+    expect(document.head.querySelectorAll("script")).toHaveLength(originalLength);
+  });
+
+  it("does nothing on HTTP error", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
+    const originalLength = document.head.querySelectorAll("script").length;
+
+    await initAnalytics();
+    expect(document.head.querySelectorAll("script")).toHaveLength(originalLength);
+  });
+
+  it("does nothing on fetch error", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network error"));
+    const originalLength = document.head.querySelectorAll("script").length;
+
+    await initAnalytics();
+    expect(document.head.querySelectorAll("script")).toHaveLength(originalLength);
   });
 });
 
