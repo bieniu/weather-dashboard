@@ -1,13 +1,13 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.18
+    rev: v0.15.20
     hooks:
       - id: ruff
         args:
           - --fix
       - id: ruff-format
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.52
+    rev: v0.0.55
     hooks:
       - id: ty
   - repo: builtin
@@ -32,13 +32,13 @@ repos:
           - --indent=4
           - --autofix
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.24.0
+    rev: v10.6.0
     hooks:
       - id: eslint
         args: [--config, eslint.config.js]
         files: \.(js|mjs)$
         additional_dependencies:
-          - eslint@9.24.0
+          - eslint@10.6.0
           - '@eslint/js'
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8
@@ -46,12 +46,12 @@ repos:
       - id: prettier
         files: ^frontend/.*\.(js|css|html)$
   - repo: https://github.com/thibaudcolas/pre-commit-stylelint
-    rev: v17.6.0
+    rev: v17.13.0
     hooks:
       - id: stylelint
         files: \.(css)$
         additional_dependencies:
-          - stylelint@16.26.1
+          - stylelint@17.14.0
           - stylelint-config-standard
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
