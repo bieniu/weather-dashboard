@@ -1,7 +1,7 @@
 services:
   weather-dashboard:
     build: .
-    image: weather-dashboard:1.4.0
+    image: weather-dashboard:1.4.1
     container_name: weather-dashboard
     restart: unless-stopped
     ports:
