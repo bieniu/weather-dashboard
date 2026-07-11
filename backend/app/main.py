@@ -56,16 +56,23 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         await cleanup_task
 
 
-CSP_HEADER = (
-    "default-src 'self'; "
-    "script-src 'self' https://cdn.jsdelivr.net; "
-    "style-src 'self' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data:; "
-    "connect-src 'self' ws: wss:; "
-    "worker-src 'self'; "
-    "frame-ancestors 'none';"
-)
+def _build_csp() -> str:
+    script_src = "'self' https://cdn.jsdelivr.net"
+    if settings.umami_host:
+        script_src += f" {settings.umami_host}"
+    return (
+        "default-src 'self'; "
+        f"script-src {script_src}; "
+        "style-src 'self' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws: wss:; "
+        "worker-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+
+
+CSP_HEADER = _build_csp()
 
 
 class CloudflareIPMiddleware(BaseHTTPMiddleware):

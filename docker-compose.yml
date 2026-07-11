@@ -16,6 +16,8 @@ services:
       - DOMAIN=${DOMAIN:-localhost}
       - PORT=${PORT:-8332}
       - SCHEME=${SCHEME:-http}
+      - UMAMI_HOST=${UMAMI_HOST}
+      - UMAMI_ID=${UMAMI_ID}
 
 volumes:
   weather-db:

@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     domain: str = "localhost"
     port: int = 8332
     scheme: str = "http"
+    umami_host: str | None = None
+    umami_id: str | None = None
     topic_prefix: str = _yaml_config["topic_prefix"]
     sensors: dict[str, SensorConfig] = {
         k: SensorConfig(**v) for k, v in _yaml_config["sensors"].items()

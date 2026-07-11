@@ -333,6 +333,23 @@ async function loadSensors() {
   return res.json();
 }
 
+async function initAnalytics() {
+  try {
+    const res = await fetch(`${API_BASE}/analytics`);
+    if (!res.ok) return;
+    const { host, id } = await res.json();
+    if (host && id) {
+      const s = document.createElement("script");
+      s.src = `${host.replace(/\/+$/, "")}/script.js`;
+      s.dataset.websiteId = id;
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+  } catch {
+    /* analytics non-critical */
+  }
+}
+
 async function init() {
   initThemeToggle();
   sensorsConfig = await loadSensors();
@@ -350,6 +367,7 @@ async function init() {
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   connectWebSocket();
+  initAnalytics();
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -369,6 +387,7 @@ export {
   connectWebSocket,
   initThemeToggle,
   loadSensors,
+  initAnalytics,
   init,
   charts,
   sensorsConfig,

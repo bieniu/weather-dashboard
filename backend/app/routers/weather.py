@@ -68,6 +68,14 @@ async def get_history(
     return (await db.execute(stmt)).scalars().all()
 
 
+@router.get("/analytics")
+async def get_analytics() -> dict:
+    """Return Umami analytics config if both host and ID are configured."""
+    if settings.umami_host and settings.umami_id:
+        return {"host": settings.umami_host, "id": settings.umami_id}
+    return {}
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     """WebSocket — push new readings to frontend clients."""

@@ -111,3 +111,28 @@ async def test_get_sensors_structure(async_client) -> None:
         assert "history_hours" in sensor
     assert data["water_level"]["history_hours"] == 24
     assert data["temperature"]["history_hours"] == 24
+
+
+async def test_get_analytics_disabled(async_client) -> None:
+    """GET /api/weather/analytics returns {} when Umami is not configured."""
+    resp = await async_client.get("/api/weather/analytics")
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
+async def test_get_analytics_enabled(async_client) -> None:
+    """GET /api/weather/analytics returns host and id when configured."""
+    from app.config import settings  # ty: ignore[unresolved-import]
+
+    host = "https://umami.example.com"
+    uid = "1234-4567-5678"
+    settings.umami_host = host
+    settings.umami_id = uid
+    try:
+        resp = await async_client.get("/api/weather/analytics")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"host": host, "id": uid}
+    finally:
+        settings.umami_host = None
+        settings.umami_id = None
