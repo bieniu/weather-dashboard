@@ -25,6 +25,12 @@ class Base(DeclarativeBase):
     """Base declarative class for ORM models."""
 
 
+_MIGRATIONS: list[tuple[str, str]] = [
+    ("level", "VARCHAR(20)"),
+    ("valid_to", "DATETIME"),
+]
+
+
 async def init_db(
     custom_engine: AsyncEngine | None = None,
 ) -> None:
@@ -33,13 +39,15 @@ async def init_db(
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Migration: add level column if missing (added after initial deployment)
         result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
-        columns = {row[1] for row in result.fetchall()}
-        if "level" not in columns:
-            await conn.execute(
-                text("ALTER TABLE weather_readings ADD COLUMN level VARCHAR(20)")
-            )
+        existing = {row[1] for row in result.fetchall()}
+        for col_name, col_type in _MIGRATIONS:
+            if col_name not in existing:
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE weather_readings ADD COLUMN {col_name} {col_type}"
+                    )
+                )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:

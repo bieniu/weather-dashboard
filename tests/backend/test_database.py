@@ -30,9 +30,9 @@ async def test_db_session_insert_and_query(db_session) -> None:
     assert row[2] == "°C"
 
 
-async def test_init_db_adds_missing_level_column(db_engine) -> None:
-    """Verify init_db migrates a table that lacks the level column."""
-    from app.database import init_db  # ty: ignore[unresolved-import]
+async def test_init_db_adds_missing_columns(db_engine) -> None:
+    """Verify init_db adds columns that were added to the model post-deployment."""
+    from app.database import _MIGRATIONS, init_db  # ty: ignore[unresolved-import]
 
     async with db_engine.begin() as conn:
         await conn.execute(text("DROP TABLE weather_readings"))
@@ -45,21 +45,22 @@ async def test_init_db_adds_missing_level_column(db_engine) -> None:
                 "unit VARCHAR(10) NOT NULL, "
                 "value_str VARCHAR(100), "
                 "icon VARCHAR(50), "
-                "valid_to DATETIME, "
                 "timestamp DATETIME NOT NULL"
                 ")"
             )
         )
         result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
         cols = {row[1] for row in result.fetchall()}
-        assert "level" not in cols
+        for col_name, _ in _MIGRATIONS:
+            assert col_name not in cols
 
     await init_db(custom_engine=db_engine)
 
     async with db_engine.begin() as conn:
         result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
         cols = {row[1] for row in result.fetchall()}
-        assert "level" in cols
+        for col_name, _ in _MIGRATIONS:
+            assert col_name in cols
 
 
 async def test_get_db_yields_session(db_engine) -> None:
