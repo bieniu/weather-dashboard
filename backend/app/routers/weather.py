@@ -92,7 +92,7 @@ async def get_alerts(
 @router.get("/sun")
 async def get_sun(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict | None:
+) -> dict:
     """Return the latest sun position reading."""
     stmt = (
         select(WeatherReading)
@@ -102,7 +102,7 @@ async def get_sun(
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
-        return {"value": None, "timestamp": None}
+        return {"parameter": None, "value": None, "timestamp": None}
     ts = row.timestamp
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=UTC)

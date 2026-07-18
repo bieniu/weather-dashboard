@@ -193,6 +193,7 @@ async def test_get_sun_no_data(async_client) -> None:
     resp = await async_client.get("/api/weather/sun")
     assert resp.status_code == 200
     data = resp.json()
+    assert data["parameter"] is None
     assert data["value"] is None
     assert data["timestamp"] is None
 

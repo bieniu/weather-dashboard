@@ -615,7 +615,7 @@ async def test_load_sun_state_from_db(monkeypatch, db_engine) -> None:
 
 
 async def test_load_sun_state_no_data(monkeypatch, db_engine) -> None:
-    """_load_sun_state leaves sun_state as None when no data exists."""
+    """_load_sun_state does not overwrite in-memory value when DB is empty."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     test_session_factory = async_sessionmaker(

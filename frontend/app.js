@@ -154,6 +154,15 @@ function requestNotificationPermission() {
   }
 }
 
+function rerenderConditionIcons() {
+  for (const [param, sensor] of Object.entries(sensorsConfig)) {
+    if (sensor.type === "condition" && conditionIconMap[param]) {
+      const img = document.getElementById(`${param}-icon-img`);
+      if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
+    }
+  }
+}
+
 async function loadSunState() {
   try {
     const res = await fetch(`${API_BASE}/sun`);
@@ -161,12 +170,7 @@ async function loadSunState() {
     const data = await res.json();
     if (data.value === "above_horizon" || data.value === "below_horizon") {
       sunState.value = data.value;
-      for (const [param, sensor] of Object.entries(sensorsConfig)) {
-        if (sensor.type === "condition" && conditionIconMap[param]) {
-          const img = document.getElementById(`${param}-icon-img`);
-          if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
-        }
-      }
+      rerenderConditionIcons();
     }
   } catch (err) {
     console.warn("[Sun] Error loading sun state:", err);
@@ -450,12 +454,7 @@ function connectWebSocket() {
       } else if (data.parameter === "sun") {
         if (data.value === "above_horizon" || data.value === "below_horizon") {
           sunState.value = data.value;
-          for (const [param, sensor] of Object.entries(sensorsConfig)) {
-            if (sensor.type === "condition" && conditionIconMap[param]) {
-              const img = document.getElementById(`${param}-icon-img`);
-              if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
-            }
-          }
+          rerenderConditionIcons();
         }
       } else {
         updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
@@ -551,6 +550,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 export {
   getConditionSvgPath,
+  rerenderConditionIcons,
   formatTimestamp,
   formatUpdated,
   resolveIcon,
