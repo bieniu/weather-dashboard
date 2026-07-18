@@ -22,13 +22,19 @@ MAX_ALERT_VALID_HOURS = 48
 logger = logging.getLogger(__name__)
 
 
-def _parse_alert_payload(payload: dict, now: datetime) -> tuple[str, str, datetime]:
+def _parse_alert_payload(
+    payload: dict, now: datetime
+) -> tuple[str, str | None, datetime]:
     """Validate and extract alert fields from an MQTT payload."""
     value = str(payload["value"])[:100]
-    level = str(payload["level"])[:20]
-    if level not in VALID_ALERT_LEVELS:
-        msg = f"Invalid alert level: {level}"
-        raise ValueError(msg)
+    level_raw = payload.get("level")
+    if level_raw is not None:
+        level = str(level_raw)[:20]
+        if level not in VALID_ALERT_LEVELS:
+            msg = f"Invalid alert level: {level}"
+            raise ValueError(msg)
+    else:
+        level = None
     valid_to = datetime.fromisoformat(payload["valid_to"])
     if valid_to.tzinfo is None:
         valid_to = valid_to.replace(tzinfo=UTC)

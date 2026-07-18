@@ -41,7 +41,7 @@ const SVG_FILE = {
   "windy-variant": "windy-variant.svg",
 };
 
-function getConditionSvgPath(iconField) {
+function getConditionSvgPath(iconField, timestamp) {
   const raw = iconField.startsWith("mdi:") ? iconField.slice(4) : iconField;
   const key = MDI_TO_KEY[raw] || raw;
 
@@ -52,7 +52,8 @@ function getConditionSvgPath(iconField) {
     if (sunState.value === "below_horizon") {
       return "weather_icons/partly-cloudy-night.svg";
     }
-    const hour = new Date().getHours();
+    const date = timestamp ? new Date(timestamp) : new Date();
+    const hour = date.getHours();
     return hour >= 6 && hour < 20
       ? "weather_icons/partly-cloudy-day.svg"
       : "weather_icons/partly-cloudy-night.svg";
@@ -66,6 +67,7 @@ const ALERT_ICONS = {
   orange: "weather_icons/alert-orange.svg",
   red: "weather_icons/alert-red.svg",
 };
+const ALERT_GREEN_ICON = "weather_icons/alert-green.svg";
 
 const charts = {};
 let sensorsConfig = {};
@@ -81,8 +83,9 @@ function showAlertCard(alert) {
 
   const img = document.getElementById("alerts-icon-img");
   if (img) {
-    img.src = ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
-    img.alt = alert.level;
+    img.src =
+      alert.level == null ? ALERT_GREEN_ICON : ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
+    img.alt = alert.level ?? "green";
   }
   const valueEl = document.getElementById("alerts-value");
   if (valueEl) valueEl.textContent = alert.value;
@@ -131,8 +134,9 @@ function handleAlertUpdate(alertData) {
 function sendAlertNotification(alertData) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const levelLabel =
-    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] ||
-    alertData.level;
+    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony", null: "Zielony" }[
+      alertData.level
+    ] || alertData.level;
   const validTo = new Date(alertData.valid_to);
   const now = new Date();
   const validToText =
@@ -375,7 +379,7 @@ function updateCard(parameter, value, unit, timestamp, icon) {
     const fallback = document.getElementById(`${parameter}-icon-fallback`);
     if (value) {
       if (img) {
-        img.src = getConditionSvgPath(iconField);
+        img.src = getConditionSvgPath(iconField, timestamp);
         img.alt = value;
         img.classList.remove("weather-card__icon--hidden");
       }
@@ -572,6 +576,7 @@ export {
   sunState,
   alertTimerId,
   ALERT_ICONS,
+  ALERT_GREEN_ICON,
   showAlertCard,
   hideAlertCard,
   updateAlertVisibility,

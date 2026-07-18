@@ -1,15 +1,15 @@
 topic_prefix: weather-dashboard
 
 sensors:
-  alerts:
-    type: alerts
-    name: Alerty meteorologiczne
   condition:
     type: condition
     name: Obecne warunki
   air_quality:
     type: text
     name: Jakość powietrza
+  alerts:
+    type: alerts
+    name: Alerty meteorologiczne
   temperature:
     name: Temperatura
     icon: mdi:thermometer
