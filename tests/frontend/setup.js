@@ -53,6 +53,11 @@ HTMLCanvasElement.prototype.getContext = vi.fn(function () {
   return {};
 });
 
+const NotificationMock = vi.fn();
+NotificationMock.permission = "granted";
+NotificationMock.requestPermission = vi.fn();
+vi.stubGlobal("Notification", NotificationMock);
+
 window.matchMedia = vi.fn(function (query) {
   return {
     matches: false,

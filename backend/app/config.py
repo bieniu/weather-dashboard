@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     }
 
     @property
+    def alerts_key(self) -> str | None:
+        """Return the sensor key of type ``alerts``, or ``None``."""
+        for key, sensor in self.sensors.items():
+            if sensor.type == "alerts":
+                return key
+        return None
+
+    @property
     def cors_origins(self) -> list[str]:
         """Return allowed CORS origins."""
         return [

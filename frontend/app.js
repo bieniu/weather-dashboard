@@ -55,8 +55,117 @@ function getConditionSvgPath(iconField) {
   return file ? `weather_icons/${file}` : null;
 }
 
+const ALERT_ICONS = {
+  yellow: "weather_icons/alert-yellow.svg",
+  orange: "weather_icons/alert-orange.svg",
+  red: "weather_icons/alert-red.svg",
+};
+
 const charts = {};
 let sensorsConfig = {};
+
+const alerts = [];
+let alertTimerId = null;
+
+function showAlertCard(alert) {
+  const card = document.getElementById("card-alerts");
+  if (!card) return;
+
+  const img = document.getElementById("alerts-icon-img");
+  if (img) {
+    img.src = ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
+    img.alt = alert.level;
+  }
+  const valueEl = document.getElementById("alerts-value");
+  if (valueEl) valueEl.textContent = alert.value;
+  const updatedEl = document.getElementById("alerts-updated");
+  if (updatedEl) updatedEl.textContent = alert.updatedText || "";
+
+  card.style.display = "";
+}
+
+function hideAlertCard() {
+  const card = document.getElementById("card-alerts");
+  if (card) card.style.display = "none";
+}
+
+function updateAlertVisibility() {
+  const now = new Date();
+  for (let i = alerts.length - 1; i >= 0; i--) {
+    if (new Date(alerts[i].valid_to) <= now) {
+      alerts.splice(i, 1);
+    }
+  }
+  const valid = alerts.find((a) => new Date(a.valid_to) > now);
+  if (valid) showAlertCard(valid);
+  else hideAlertCard();
+}
+
+function scheduleAlertCheck() {
+  if (alertTimerId) return;
+  alertTimerId = setInterval(updateAlertVisibility, 30000);
+  window.addEventListener("beforeunload", () => {
+    if (alertTimerId) clearInterval(alertTimerId);
+  });
+}
+
+function handleAlertUpdate(alertData) {
+  const existing = alerts.find((a) => a.timestamp === alertData.timestamp);
+  if (!existing) {
+    alerts.unshift(alertData);
+    sendAlertNotification(alertData);
+  } else {
+    Object.assign(existing, alertData);
+  }
+  updateAlertVisibility();
+}
+
+function sendAlertNotification(alertData) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const levelLabel =
+    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] ||
+    alertData.level;
+  const validTo = new Date(alertData.valid_to);
+  const now = new Date();
+  const validToText =
+    validTo.getFullYear() === now.getFullYear() &&
+    validTo.getMonth() === now.getMonth() &&
+    validTo.getDate() === now.getDate()
+      ? validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
+      : `${validTo.toLocaleDateString("pl-PL", { day: "numeric", month: "long" })}, ${validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}`;
+  new Notification("Alert meteorologiczny", {
+    body: `${levelLabel} alert: ${alertData.value}\nWażny do: ${validToText}`,
+    tag: alertData.timestamp,
+  });
+}
+
+function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+
+async function loadAlerts() {
+  try {
+    const res = await fetch(`${API_BASE}/alerts`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    alerts.length = 0;
+    for (const r of data) {
+      alerts.push({
+        value: r.value_str,
+        valid_to: r.valid_to,
+        level: r.level,
+        timestamp: r.timestamp,
+        updatedText: formatUpdated(r.timestamp),
+      });
+    }
+    updateAlertVisibility();
+  } catch (err) {
+    console.error("[Alerts] Error fetching alerts:", err);
+  }
+}
 
 function formatTimestamp(isoString) {
   const d = new Date(isoString);
@@ -85,7 +194,19 @@ function createCard(sensorKey, sensor, index) {
     card.style.setProperty("--sensor-color", sensor.color);
   }
 
-  if (sensor.type === "condition" || sensor.type === "text") {
+  if (sensor.type === "alerts") {
+    card.style.display = "none";
+    card.innerHTML = `
+      <div class="weather-card__header weather-card__header--condition">
+        <span class="weather-card__label">${sensor.name}</span>
+      </div>
+      <div class="weather-card__value-wrap weather-card__value-wrap--condition">
+        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-img" src="" alt="">
+        <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
+      </div>
+      <p class="weather-card__updated" id="${sensorKey}-updated"></p>
+    `;
+  } else if (sensor.type === "condition" || sensor.type === "text") {
     const iconFile = sensorKey.replace(/_/g, "-");
     card.innerHTML = `
       <div class="weather-card__header weather-card__header--condition">
@@ -202,7 +323,7 @@ function updateChartTheme() {
 
 function updateCard(parameter, value, unit, timestamp, icon) {
   const sensor = sensorsConfig[parameter];
-  if (!sensor) return;
+  if (!sensor || sensor.type === "alerts") return;
 
   const valueEl = document.getElementById(`${parameter}-value`);
   const updatedEl = document.getElementById(`${parameter}-updated`);
@@ -246,6 +367,8 @@ function appendChartPoint(parameter, value, timestamp) {
 async function loadHistory(parameter) {
   try {
     const sensor = sensorsConfig[parameter];
+    if (sensor?.type === "alerts") return;
+
     const hours = sensor?.history_hours ?? HISTORY_HOURS;
     const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -287,8 +410,18 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
-      appendChartPoint(data.parameter, data.value, data.timestamp);
+      if (data.parameter === "alerts") {
+        handleAlertUpdate({
+          value: data.value,
+          valid_to: data.valid_to,
+          level: data.level,
+          timestamp: data.timestamp,
+          updatedText: formatUpdated(data.timestamp),
+        });
+      } else {
+        updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
+        appendChartPoint(data.parameter, data.value, data.timestamp);
+      }
     } catch (e) {
       console.warn("[WS] Message parse error:", e);
     }
@@ -358,7 +491,7 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    if (sensor.type !== "condition" && sensor.type !== "text") {
+    if (sensor.type !== "condition" && sensor.type !== "text" && sensor.type !== "alerts") {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     }
     idx++;
@@ -366,8 +499,12 @@ async function init() {
 
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
+  loadAlerts();
+  scheduleAlertCheck();
   connectWebSocket();
   initAnalytics();
+
+  document.addEventListener("click", requestNotificationPermission, { once: true });
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -391,6 +528,17 @@ export {
   init,
   charts,
   sensorsConfig,
+  alerts,
+  alertTimerId,
+  ALERT_ICONS,
+  showAlertCard,
+  hideAlertCard,
+  updateAlertVisibility,
+  scheduleAlertCheck,
+  handleAlertUpdate,
+  sendAlertNotification,
+  requestNotificationPermission,
+  loadAlerts,
   API_BASE,
   HISTORY_HOURS,
   MAX_CHART_POINTS,

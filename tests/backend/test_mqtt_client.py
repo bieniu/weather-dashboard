@@ -265,6 +265,168 @@ async def test_process_missing_value_logs_warning(
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_alert_message(monkeypatch, db_engine) -> None:
+    """An alert MQTT message is persisted with value_str, level, valid_to."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
+    message.payload = json.dumps(
+        {
+            "value": "burze",
+            "valid_to": "2026-06-23 18:00:00+00:00",
+            "level": "yellow",
+        }
+    ).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    await _process_mqtt_message(message)
+
+    async with db_engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT parameter, value, unit, value_str, level, valid_to "
+                "FROM weather_readings"
+            )
+        )
+        row = result.fetchone()
+    assert row is not None
+    assert row[0] == "alerts"
+    assert row[1] is None
+    assert row[2] == ""
+    assert row[3] == "burze"
+    assert row[4] == "yellow"
+    assert row[5] is not None
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_alert_invalid_level(monkeypatch, caplog, db_engine) -> None:
+    """An alert with invalid level is rejected and not persisted."""
+    import logging
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
+    message.payload = json.dumps(
+        {
+            "value": "test",
+            "valid_to": "2026-06-23 18:00:00+00:00",
+            "level": "invalid_level",
+        }
+    ).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    with caplog.at_level(logging.WARNING):
+        await _process_mqtt_message(message)
+
+    assert "Payload parse error" in caplog.text
+    async with db_engine.connect() as conn:
+        result = await conn.execute(text("SELECT COUNT(*) FROM weather_readings"))
+        count = result.scalar()
+    assert count == 0
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_alert_expired_valid_to(monkeypatch, caplog, db_engine) -> None:
+    """An alert with valid_to in the past is rejected."""
+    import logging
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
+    message.payload = json.dumps(
+        {
+            "value": "test",
+            "valid_to": "2026-06-22 12:00:00+00:00",
+            "level": "red",
+        }
+    ).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    with caplog.at_level(logging.WARNING):
+        await _process_mqtt_message(message)
+
+    assert "Payload parse error" in caplog.text
+    async with db_engine.connect() as conn:
+        result = await conn.execute(text("SELECT COUNT(*) FROM weather_readings"))
+        count = result.scalar()
+    assert count == 0
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_alert_broadcasts(monkeypatch, db_engine) -> None:
+    """An alert MQTT message broadcasts with level, valid_to, value."""
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
+
+    ws = AsyncMock()
+
+    import app.mqtt_client as mqtt_mod  # ty: ignore[unresolved-import]
+
+    original_manager = mqtt_mod.manager
+    test_manager = WebSocketManager()
+    await test_manager.connect(ws)
+    monkeypatch.setattr(mqtt_mod, "manager", test_manager)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
+    message.payload = json.dumps(
+        {
+            "value": "burze",
+            "valid_to": "2026-06-23 18:00:00+00:00",
+            "level": "yellow",
+        }
+    ).encode()
+
+    await mqtt_mod._process_mqtt_message(message)
+
+    expected = json.dumps(
+        {
+            "parameter": "alerts",
+            "value": "burze",
+            "valid_to": "2026-06-23T18:00:00+00:00",
+            "level": "yellow",
+            "timestamp": "2026-06-23T12:00:00+00:00",
+        }
+    )
+    ws.send_text.assert_awaited_once_with(expected)
+
+    monkeypatch.setattr(mqtt_mod, "manager", original_manager)
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_numeric_broadcasts(monkeypatch, db_engine) -> None:
     """A numeric MQTT message broadcasts the reading via WebSocketManager."""
     from unittest.mock import AsyncMock
