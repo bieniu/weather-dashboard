@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import aiomqtt
@@ -15,7 +15,28 @@ from .config import settings
 from .database import SessionLocal
 from .models import WeatherReading
 
+VALID_ALERT_LEVELS = {"yellow", "orange", "red"}
+MAX_ALERT_VALID_HOURS = 48
+
 logger = logging.getLogger(__name__)
+
+
+def _parse_alert_payload(payload: dict, now: datetime) -> tuple[str, str, datetime]:
+    """Validate and extract alert fields from an MQTT payload."""
+    value = str(payload["value"])[:100]
+    level = str(payload["level"])[:20]
+    if level not in VALID_ALERT_LEVELS:
+        msg = f"Invalid alert level: {level}"
+        raise ValueError(msg)
+    valid_to = datetime.fromisoformat(payload["valid_to"])
+    if valid_to.tzinfo is None:
+        valid_to = valid_to.replace(tzinfo=UTC)
+    max_valid = now + timedelta(hours=MAX_ALERT_VALID_HOURS)
+    if valid_to <= now or valid_to > max_valid:
+        msg = f"valid_to out of range: {valid_to}"
+        raise ValueError(msg)
+    return value, level, valid_to
+
 
 TOPIC_PARAMETER_MAP: dict[str, str] = {
     f"{settings.topic_prefix}/{sensor}": sensor for sensor in settings.sensors
@@ -59,12 +80,20 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         return  # unknown topic — ignore
 
     sensor_type = settings.sensors[parameter].type
-    is_string = sensor_type in {"condition", "text"}
     now = datetime.now(UTC)
 
     try:
         payload = json.loads(message.payload)
-        if is_string:
+        if sensor_type == "alert":
+            value_str, level, valid_to = _parse_alert_payload(payload, now)
+            reading = WeatherReading(
+                parameter=parameter,
+                value_str=value_str,
+                level=level,
+                valid_to=valid_to,
+                timestamp=now,
+            )
+        elif sensor_type in {"condition", "text"}:
             value_str = str(payload["value"])
             icon = str(payload.get("icon", "")) if sensor_type == "condition" else ""
             reading = WeatherReading(
@@ -84,7 +113,17 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         db.add(reading)
         await db.commit()
 
-    if is_string:
+    if sensor_type == "alert":
+        await manager.broadcast(
+            {
+                "parameter": parameter,
+                "value": value_str,
+                "valid_to": valid_to.isoformat(),
+                "level": level,
+                "timestamp": now.isoformat(),
+            }
+        )
+    elif sensor_type in {"condition", "text"}:
         data: dict[str, object] = {
             "parameter": parameter,
             "value": value_str,

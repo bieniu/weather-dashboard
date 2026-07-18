@@ -91,6 +91,7 @@ async def test_get_sensors_structure(async_client) -> None:
     resp = await async_client.get("/api/weather/sensors")
     data = resp.json()
     expected_sensors = {
+        "alert",
         "condition",
         "air_quality",
         "temperature",
@@ -111,6 +112,80 @@ async def test_get_sensors_structure(async_client) -> None:
         assert "history_hours" in sensor
     assert data["water_level"]["history_hours"] == 24
     assert data["temperature"]["history_hours"] == 24
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_alerts_empty_db(async_client) -> None:
+    """GET /api/weather/alerts returns empty list when no alerts exist."""
+    resp = await async_client.get("/api/weather/alerts")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_alerts_filters_expired(async_client, db_session) -> None:
+    """GET /api/weather/alerts returns only valid alerts (valid_to > now)."""
+    from datetime import timedelta
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    now = datetime.now(UTC)
+    valid = WeatherReading(
+        parameter="alert",
+        value_str="burze",
+        level="yellow",
+        valid_to=now + timedelta(hours=24),
+        timestamp=now,
+    )
+    expired = WeatherReading(
+        parameter="alert",
+        value_str="stare",
+        level="red",
+        valid_to=now - timedelta(hours=1),
+        timestamp=now - timedelta(hours=2),
+    )
+    db_session.add_all([valid, expired])
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/alerts")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["value_str"] == "burze"
+    assert data[0]["level"] == "yellow"
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_alerts_ordered_newest_first(async_client, db_session) -> None:
+    """GET /api/weather/alerts returns valid alerts ordered by timestamp DESC."""
+    from datetime import timedelta
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    now = datetime.now(UTC)
+    older = WeatherReading(
+        parameter="alert",
+        value_str="older",
+        level="yellow",
+        valid_to=now + timedelta(hours=24),
+        timestamp=now - timedelta(hours=2),
+    )
+    newer = WeatherReading(
+        parameter="alert",
+        value_str="newer",
+        level="orange",
+        valid_to=now + timedelta(hours=24),
+        timestamp=now,
+    )
+    db_session.add_all([older, newer])
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/alerts")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 2
+    assert data[0]["value_str"] == "newer"
+    assert data[1]["value_str"] == "older"
 
 
 async def test_get_analytics_disabled(async_client) -> None:

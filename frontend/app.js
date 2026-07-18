@@ -55,8 +55,90 @@ function getConditionSvgPath(iconField) {
   return file ? `weather_icons/${file}` : null;
 }
 
+const ALERT_ICONS = {
+  yellow: "weather_icons/alert-yellow.svg",
+  orange: "weather_icons/alert-orange.svg",
+  red: "weather_icons/alert-red.svg",
+};
+
 const charts = {};
 let sensorsConfig = {};
+
+const alerts = [];
+let alertTimerId = null;
+
+function showAlertCard(alert) {
+  const card = document.getElementById("card-alert");
+  if (!card) return;
+
+  const img = document.getElementById("alert-icon-img");
+  if (img) {
+    img.src = ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
+    img.alt = alert.level;
+  }
+  const valueEl = document.getElementById("alert-value");
+  if (valueEl) valueEl.textContent = alert.value;
+  const updatedEl = document.getElementById("alert-updated");
+  if (updatedEl) updatedEl.textContent = alert.updatedText || "";
+
+  card.style.display = "";
+}
+
+function hideAlertCard() {
+  const card = document.getElementById("card-alert");
+  if (card) card.style.display = "none";
+}
+
+function updateAlertVisibility() {
+  const now = new Date();
+  for (let i = alerts.length - 1; i >= 0; i--) {
+    if (new Date(alerts[i].valid_to) <= now) {
+      alerts.splice(i, 1);
+    }
+  }
+  const valid = alerts.find((a) => new Date(a.valid_to) > now);
+  if (valid) showAlertCard(valid);
+  else hideAlertCard();
+}
+
+function scheduleAlertCheck() {
+  if (alertTimerId) return;
+  alertTimerId = setInterval(updateAlertVisibility, 30000);
+  window.addEventListener("beforeunload", () => {
+    if (alertTimerId) clearInterval(alertTimerId);
+  });
+}
+
+function handleAlertUpdate(alertData) {
+  const existing = alerts.find((a) => a.timestamp === alertData.timestamp);
+  if (!existing) {
+    alerts.unshift(alertData);
+  } else {
+    Object.assign(existing, alertData);
+  }
+  updateAlertVisibility();
+}
+
+async function loadAlerts() {
+  try {
+    const res = await fetch(`${API_BASE}/alerts`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    alerts.length = 0;
+    for (const r of data) {
+      alerts.push({
+        value: r.value_str,
+        valid_to: r.valid_to,
+        level: r.level,
+        timestamp: r.timestamp,
+        updatedText: formatUpdated(r.timestamp),
+      });
+    }
+    updateAlertVisibility();
+  } catch (err) {
+    console.error("[Alerts] Error fetching alerts:", err);
+  }
+}
 
 function formatTimestamp(isoString) {
   const d = new Date(isoString);
@@ -85,7 +167,19 @@ function createCard(sensorKey, sensor, index) {
     card.style.setProperty("--sensor-color", sensor.color);
   }
 
-  if (sensor.type === "condition" || sensor.type === "text") {
+  if (sensor.type === "alert") {
+    card.style.display = "none";
+    card.innerHTML = `
+      <div class="weather-card__header weather-card__header--condition">
+        <span class="weather-card__label">${sensor.name}</span>
+      </div>
+      <div class="weather-card__value-wrap weather-card__value-wrap--condition">
+        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-img" src="" alt="">
+        <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
+      </div>
+      <p class="weather-card__updated" id="${sensorKey}-updated"></p>
+    `;
+  } else if (sensor.type === "condition" || sensor.type === "text") {
     const iconFile = sensorKey.replace(/_/g, "-");
     card.innerHTML = `
       <div class="weather-card__header weather-card__header--condition">
@@ -202,7 +296,7 @@ function updateChartTheme() {
 
 function updateCard(parameter, value, unit, timestamp, icon) {
   const sensor = sensorsConfig[parameter];
-  if (!sensor) return;
+  if (!sensor || sensor.type === "alert") return;
 
   const valueEl = document.getElementById(`${parameter}-value`);
   const updatedEl = document.getElementById(`${parameter}-updated`);
@@ -251,6 +345,8 @@ async function loadHistory(parameter) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
 
+    if (sensor?.type === "alert") return;
+
     if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
         const last = history[history.length - 1];
@@ -287,8 +383,18 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
-      appendChartPoint(data.parameter, data.value, data.timestamp);
+      if (data.parameter === "alert") {
+        handleAlertUpdate({
+          value: data.value,
+          valid_to: data.valid_to,
+          level: data.level,
+          timestamp: data.timestamp,
+          updatedText: formatUpdated(data.timestamp),
+        });
+      } else {
+        updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
+        appendChartPoint(data.parameter, data.value, data.timestamp);
+      }
     } catch (e) {
       console.warn("[WS] Message parse error:", e);
     }
@@ -358,13 +464,16 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    if (sensor.type !== "condition" && sensor.type !== "text") {
+    if (sensor.type !== "condition" && sensor.type !== "text" && sensor.type !== "alert") {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     }
     idx++;
   }
 
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
+
+  await loadAlerts();
+  scheduleAlertCheck();
 
   connectWebSocket();
   initAnalytics();
@@ -391,6 +500,15 @@ export {
   init,
   charts,
   sensorsConfig,
+  alerts,
+  alertTimerId,
+  ALERT_ICONS,
+  showAlertCard,
+  hideAlertCard,
+  updateAlertVisibility,
+  scheduleAlertCheck,
+  handleAlertUpdate,
+  loadAlerts,
   API_BASE,
   HISTORY_HOURS,
   MAX_CHART_POINTS,

@@ -68,6 +68,23 @@ async def get_history(
     return (await db.execute(stmt)).scalars().all()
 
 
+@router.get("/alerts", response_model=list[WeatherReadingOut])
+async def get_alerts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Sequence[WeatherReading]:
+    """Return all currently-valid alert readings (valid_to > now), newest first."""
+    now = datetime.now(UTC)
+    stmt = (
+        select(WeatherReading)
+        .where(
+            WeatherReading.parameter == "alert",
+            WeatherReading.valid_to > now,
+        )
+        .order_by(desc(WeatherReading.timestamp))
+    )
+    return (await db.execute(stmt)).scalars().all()
+
+
 @router.get("/analytics")
 async def get_analytics() -> dict:
     """Return Umami analytics config if both host and ID are configured."""

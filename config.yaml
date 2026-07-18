@@ -1,6 +1,9 @@
 topic_prefix: weather-dashboard
 
 sensors:
+  alert:
+    type: alert
+    name: Alerty meteorologiczne
   condition:
     type: condition
     name: Obecne warunki

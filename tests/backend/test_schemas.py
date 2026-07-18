@@ -53,6 +53,45 @@ def test_serialize_utc_timestamp_stays_utc() -> None:
     assert serialized["timestamp"] == "2026-06-23T12:00:00+00:00"
 
 
+def test_alert_fields_serialization() -> None:
+    """Alert reading with level and valid_to serialises correctly."""
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
+
+    data = WeatherReadingOut(
+        id=4,
+        parameter="alert",
+        value=None,
+        unit="",
+        value_str="burze",
+        level="yellow",
+        valid_to=datetime(2026, 7, 18, 19, 0, 0, tzinfo=UTC),
+        timestamp=datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC),
+    )
+    serialized = data.model_dump(mode="json")
+    assert serialized["level"] == "yellow"
+    assert serialized["valid_to"] == "2026-07-18T19:00:00+00:00"
+    assert serialized["value_str"] == "burze"
+    assert serialized["value"] is None
+
+
+def test_alert_valid_to_none_serialization() -> None:
+    """Alert with valid_to=None serialises valid_to as None."""
+    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
+
+    data = WeatherReadingOut(
+        id=5,
+        parameter="alert",
+        value=None,
+        unit="",
+        value_str="test",
+        level="red",
+        valid_to=None,
+        timestamp=datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC),
+    )
+    serialized = data.model_dump(mode="json")
+    assert serialized["valid_to"] is None
+
+
 def test_condition_fields_nullable() -> None:
     """Condition readings serialise value=None, value_str and icon present."""
     from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
