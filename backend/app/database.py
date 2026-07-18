@@ -3,7 +3,13 @@
 import os
 from typing import TYPE_CHECKING
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -19,10 +25,21 @@ class Base(DeclarativeBase):
     """Base declarative class for ORM models."""
 
 
-async def init_db() -> None:
-    """Create all database tables."""
-    async with engine.begin() as conn:
+async def init_db(
+    custom_engine: AsyncEngine | None = None,
+) -> None:
+    """Create all database tables and apply migrations."""
+    eng = custom_engine or engine
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Migration: add level column if missing (added after initial deployment)
+        result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
+        columns = {row[1] for row in result.fetchall()}
+        if "level" not in columns:
+            await conn.execute(
+                text("ALTER TABLE weather_readings ADD COLUMN level VARCHAR(20)")
+            )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
