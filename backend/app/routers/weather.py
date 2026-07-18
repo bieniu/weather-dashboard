@@ -89,6 +89,30 @@ async def get_alerts(
     return (await db.execute(stmt)).scalars().all()
 
 
+@router.get("/sun")
+async def get_sun(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Return the latest sun position reading."""
+    stmt = (
+        select(WeatherReading)
+        .where(WeatherReading.parameter == "sun")
+        .order_by(desc(WeatherReading.timestamp))
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        return {"parameter": None, "value": None, "timestamp": None}
+    ts = row.timestamp
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return {
+        "parameter": "sun",
+        "value": row.value_str,
+        "timestamp": ts.isoformat(),
+    }
+
+
 @router.get("/analytics")
 async def get_analytics() -> dict:
     """Return Umami analytics config if both host and ID are configured."""

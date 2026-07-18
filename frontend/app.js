@@ -46,6 +46,12 @@ function getConditionSvgPath(iconField) {
   const key = MDI_TO_KEY[raw] || raw;
 
   if (key === "partlycloudy") {
+    if (sunState.value === "above_horizon") {
+      return "weather_icons/partly-cloudy-day.svg";
+    }
+    if (sunState.value === "below_horizon") {
+      return "weather_icons/partly-cloudy-night.svg";
+    }
     const hour = new Date().getHours();
     return hour >= 6 && hour < 20
       ? "weather_icons/partly-cloudy-day.svg"
@@ -63,6 +69,8 @@ const ALERT_ICONS = {
 
 const charts = {};
 let sensorsConfig = {};
+const sunState = { value: null };
+const conditionIconMap = {};
 
 const alerts = [];
 let alertTimerId = null;
@@ -143,6 +151,29 @@ function requestNotificationPermission() {
   if (!("Notification" in window)) return;
   if (Notification.permission === "default") {
     Notification.requestPermission();
+  }
+}
+
+function rerenderConditionIcons() {
+  for (const [param, sensor] of Object.entries(sensorsConfig)) {
+    if (sensor.type === "condition" && conditionIconMap[param]) {
+      const img = document.getElementById(`${param}-icon-img`);
+      if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
+    }
+  }
+}
+
+async function loadSunState() {
+  try {
+    const res = await fetch(`${API_BASE}/sun`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.value === "above_horizon" || data.value === "below_horizon") {
+      sunState.value = data.value;
+      rerenderConditionIcons();
+    }
+  } catch (err) {
+    console.warn("[Sun] Error loading sun state:", err);
   }
 }
 
@@ -338,11 +369,13 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   }
 
   if (sensor.type === "condition") {
+    const iconField = icon || value;
+    conditionIconMap[parameter] = iconField;
     const img = document.getElementById(`${parameter}-icon-img`);
     const fallback = document.getElementById(`${parameter}-icon-fallback`);
     if (value) {
       if (img) {
-        img.src = getConditionSvgPath(icon || value);
+        img.src = getConditionSvgPath(iconField);
         img.alt = value;
         img.classList.remove("weather-card__icon--hidden");
       }
@@ -418,6 +451,11 @@ function connectWebSocket() {
           timestamp: data.timestamp,
           updatedText: formatUpdated(data.timestamp),
         });
+      } else if (data.parameter === "sun") {
+        if (data.value === "above_horizon" || data.value === "below_horizon") {
+          sunState.value = data.value;
+          rerenderConditionIcons();
+        }
       } else {
         updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
         appendChartPoint(data.parameter, data.value, data.timestamp);
@@ -500,6 +538,7 @@ async function init() {
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   loadAlerts();
+  loadSunState();
   scheduleAlertCheck();
   connectWebSocket();
   initAnalytics();
@@ -511,6 +550,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 export {
   getConditionSvgPath,
+  rerenderConditionIcons,
   formatTimestamp,
   formatUpdated,
   resolveIcon,
@@ -529,6 +569,7 @@ export {
   charts,
   sensorsConfig,
   alerts,
+  sunState,
   alertTimerId,
   ALERT_ICONS,
   showAlertCard,
@@ -539,6 +580,7 @@ export {
   sendAlertNotification,
   requestNotificationPermission,
   loadAlerts,
+  loadSunState,
   API_BASE,
   HISTORY_HOURS,
   MAX_CHART_POINTS,

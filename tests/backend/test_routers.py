@@ -188,6 +188,43 @@ async def test_get_alerts_ordered_newest_first(async_client, db_session) -> None
     assert data[1]["value_str"] == "older"
 
 
+async def test_get_sun_no_data(async_client) -> None:
+    """GET /api/weather/sun returns null when no sun data exists."""
+    resp = await async_client.get("/api/weather/sun")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["parameter"] is None
+    assert data["value"] is None
+    assert data["timestamp"] is None
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_sun_with_data(async_client, db_session) -> None:
+    """GET /api/weather/sun returns the latest sun reading."""
+    from datetime import UTC, datetime
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    now = datetime.now(UTC)
+    older = WeatherReading(
+        parameter="sun", value_str="below_horizon", timestamp=now
+    )
+    newer = WeatherReading(
+        parameter="sun",
+        value_str="above_horizon",
+        timestamp=now,
+    )
+    db_session.add_all([older, newer])
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/sun")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["value"] == "above_horizon"
+    assert data["timestamp"] == "2026-06-23T12:00:00+00:00"
+    assert data["parameter"] == "sun"
+
+
 async def test_get_analytics_disabled(async_client) -> None:
     """GET /api/weather/analytics returns {} when Umami is not configured."""
     resp = await async_client.get("/api/weather/analytics")

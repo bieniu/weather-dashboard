@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .config import settings
 from .database import SessionLocal, init_db
 from .models import WeatherReading
-from .mqtt_client import mqtt_listener
+from .mqtt_client import _load_sun_state, mqtt_listener
 from .ratelimit import RateLimitMiddleware
 from .routers.weather import router as weather_router
 
@@ -45,6 +45,7 @@ async def cleanup_old_readings() -> None:
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     """Startup/shutdown lifecycle — initialize DB, MQTT and cleanup tasks."""
     await init_db()
+    await _load_sun_state()
     mqtt_task = asyncio.create_task(mqtt_listener())
     cleanup_task = asyncio.create_task(cleanup_old_readings())
     yield

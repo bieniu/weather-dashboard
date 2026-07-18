@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import aiomqtt
+from sqlalchemy import select
 
 if TYPE_CHECKING:
     from fastapi import WebSocket
@@ -44,6 +45,8 @@ TOPIC_PARAMETER_MAP: dict[str, str] = {
     f"{settings.topic_prefix}/{sensor}": sensor for sensor in settings.sensors
 }
 
+SUN_TOPIC = f"{settings.topic_prefix}/sun"
+
 
 class WebSocketManager:
     """Manages active WebSocket connections and broadcasts messages."""
@@ -73,10 +76,62 @@ class WebSocketManager:
 
 manager = WebSocketManager()
 
+sun_state: dict[str, str | None] = {"value": None}
+
+
+async def _process_sun_message(message: aiomqtt.Message) -> None:
+    """Handle a sun position MQTT message, persist to DB and broadcast."""
+    now = datetime.now(UTC)
+    try:
+        payload = json.loads(message.payload)
+        value = str(payload["value"])
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.warning("Payload parse error on topic %s: %s", SUN_TOPIC, e)
+        return
+
+    if value not in {"above_horizon", "below_horizon"}:
+        logger.warning("Invalid sun value: %s", value)
+        return
+
+    reading = WeatherReading(parameter="sun", value_str=value, timestamp=now)
+    async with SessionLocal() as db:
+        db.add(reading)
+        await db.commit()
+
+    sun_state["value"] = value
+
+    await manager.broadcast(
+        {
+            "parameter": "sun",
+            "value": value,
+            "timestamp": now.isoformat(),
+        }
+    )
+
+
+async def _load_sun_state() -> None:
+    """Load the latest sun state from the database on startup."""
+    async with SessionLocal() as db:
+        result = await db.execute(
+            select(WeatherReading.value_str)
+            .where(WeatherReading.parameter == "sun")
+            .order_by(WeatherReading.timestamp.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            sun_state["value"] = row
+            logger.info("Sun state loaded from DB: %s", row)
+
 
 async def _process_mqtt_message(message: aiomqtt.Message) -> None:
     """Parse, persist and broadcast a single MQTT message."""
     topic = str(message.topic)
+
+    if topic == SUN_TOPIC:
+        await _process_sun_message(message)
+        return
+
     parameter = TOPIC_PARAMETER_MAP.get(topic)
     if parameter is None:
         return  # unknown topic — ignore
@@ -163,7 +218,12 @@ async def mqtt_listener() -> None:
                 )
 
                 async for message in client.messages:
-                    await _process_mqtt_message(message)
+                    try:
+                        await _process_mqtt_message(message)
+                    except Exception:
+                        logger.exception(
+                            "Error processing message on topic %s", message.topic
+                        )
 
         except aiomqtt.MqttError as e:
             logger.warning("Connection error: %s. Retrying in 5s...", e)

@@ -19,6 +19,7 @@ import {
   init,
   charts,
   sensorsConfig,
+  sunState,
   alerts,
   ALERT_ICONS,
   showAlertCard,
@@ -28,6 +29,7 @@ import {
   sendAlertNotification,
   requestNotificationPermission,
   loadAlerts,
+  loadSunState,
   API_BASE,
   HISTORY_HOURS,
   MAX_CHART_POINTS,
@@ -36,6 +38,7 @@ import {
 beforeEach(() => {
   Object.keys(charts).forEach((k) => delete charts[k]);
   Object.keys(sensorsConfig).forEach((k) => delete sensorsConfig[k]);
+  sunState.value = null;
 });
 
 const SENSOR_NUMERIC = {
@@ -83,6 +86,22 @@ describe("utils", () => {
   it("getConditionSvgPath resolves partlycloudy to night variant (20-6h)", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-24T22:00:00"));
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-night.svg");
+    vi.useRealTimers();
+  });
+
+  it("getConditionSvgPath uses sunState above_horizon over time", () => {
+    sunState.value = "above_horizon";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-24T22:00:00"));
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-day.svg");
+    vi.useRealTimers();
+  });
+
+  it("getConditionSvgPath uses sunState below_horizon over time", () => {
+    sunState.value = "below_horizon";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-24T12:00:00"));
     expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-night.svg");
     vi.useRealTimers();
   });
@@ -720,6 +739,106 @@ describe("alert", () => {
     expect(document.getElementById("alerts-value").textContent).toBe("ws-alert");
     delete globalThis.WebSocket;
   });
+
+  it("WS message with sun parameter updates sunState and re-renders condition icon", () => {
+    globalThis.location = { host: "localhost:8332", protocol: "http:" };
+    const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
+    globalThis.WebSocket = vi.fn(function () { return wsMock; });
+
+    sensorsConfig.condition = { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" };
+    const card = createCard("condition", sensorsConfig.condition, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    connectWebSocket();
+
+    updateCard("condition", "partly cloudy", null, "2026-06-23T12:00:00Z", "mdi:weather-partly-cloudy");
+
+    expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-day.svg");
+
+    wsMock.onmessage({
+      data: JSON.stringify({
+        parameter: "sun",
+        value: "below_horizon",
+        timestamp: "2026-06-23T22:00:00Z",
+      }),
+    });
+    expect(sunState.value).toBe("below_horizon");
+    expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-night.svg");
+    delete globalThis.WebSocket;
+  });
+});
+
+describe("loadSunState", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    sunState.value = null;
+  });
+
+  it("fetches sun state from API and sets sunState.value", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ value: "above_horizon", timestamp: "2026-06-23T12:00:00Z" }),
+    });
+
+    await loadSunState();
+    expect(sunState.value).toBe("above_horizon");
+  });
+
+  it("handles below_horizon value", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
+    });
+
+    await loadSunState();
+    expect(sunState.value).toBe("below_horizon");
+  });
+
+  it("ignores null sun state without overriding sunState", async () => {
+    sunState.value = "above_horizon";
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ value: null, timestamp: null }),
+    });
+
+    await loadSunState();
+    expect(sunState.value).toBe("above_horizon");
+  });
+
+  it("re-renders condition icons on sun state change", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
+    });
+
+    sensorsConfig.condition = { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" };
+    const card = createCard("condition", sensorsConfig.condition, 0);
+    document.getElementById("weather-grid").appendChild(card);
+    updateCard("condition", "partly cloudy", null, "2026-06-23T12:00:00Z", "mdi:weather-partly-cloudy");
+
+    await loadSunState();
+    expect(sunState.value).toBe("below_horizon");
+    expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-night.svg");
+    delete sensorsConfig.condition;
+  });
+
+  it("logs warning on HTTP error", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+
+    await loadSunState();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("logs warning on fetch error", async () => {
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network"));
+
+    await loadSunState();
+    expect(console.warn).toHaveBeenCalled();
+  });
 });
 
 describe("init", () => {
@@ -747,9 +866,11 @@ describe("init", () => {
       temperature: { name: "Temp", type: "numeric", icon: "mdi:thermometer", color: "#E53935", round: 1, unit: "°C" },
       condition: { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" },
     };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(sensors),
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes("/sensors")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: "above_horizon" }) });
     });
 
     await init();
@@ -765,9 +886,11 @@ describe("init", () => {
     const sensors = {
       temperature: { name: "Temp", type: "numeric", icon: "mdi:thermometer", color: "#E53935", round: 1, unit: "°C" },
     };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(sensors),
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes("/sensors")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: "above_horizon" }) });
     });
 
     await init();
