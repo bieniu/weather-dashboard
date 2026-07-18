@@ -4,7 +4,12 @@ import os
 from typing import TYPE_CHECKING
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -20,9 +25,12 @@ class Base(DeclarativeBase):
     """Base declarative class for ORM models."""
 
 
-async def init_db() -> None:
+async def init_db(
+    custom_engine: AsyncEngine | None = None,
+) -> None:
     """Create all database tables and apply migrations."""
-    async with engine.begin() as conn:
+    eng = custom_engine or engine
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
         # Migration: add level column if missing (added after initial deployment)

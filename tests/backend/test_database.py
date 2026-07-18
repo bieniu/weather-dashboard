@@ -30,6 +30,38 @@ async def test_db_session_insert_and_query(db_session) -> None:
     assert row[2] == "°C"
 
 
+async def test_init_db_adds_missing_level_column(db_engine) -> None:
+    """Verify init_db migrates a table that lacks the level column."""
+    from app.database import init_db  # ty: ignore[unresolved-import]
+
+    async with db_engine.begin() as conn:
+        await conn.execute(text("DROP TABLE weather_readings"))
+        await conn.execute(
+            text(
+                "CREATE TABLE weather_readings ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "parameter VARCHAR(50) NOT NULL, "
+                "value FLOAT, "
+                "unit VARCHAR(10) NOT NULL, "
+                "value_str VARCHAR(100), "
+                "icon VARCHAR(50), "
+                "valid_to DATETIME, "
+                "timestamp DATETIME NOT NULL"
+                ")"
+            )
+        )
+        result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
+        cols = {row[1] for row in result.fetchall()}
+        assert "level" not in cols
+
+    await init_db(custom_engine=db_engine)
+
+    async with db_engine.begin() as conn:
+        result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
+        cols = {row[1] for row in result.fetchall()}
+        assert "level" in cols
+
+
 async def test_get_db_yields_session(db_engine) -> None:
     """Verify get_db dependency yields an AsyncSession."""
     from app.database import get_db  # ty: ignore[unresolved-import]
