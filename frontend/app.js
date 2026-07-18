@@ -41,7 +41,7 @@ const SVG_FILE = {
   "windy-variant": "windy-variant.svg",
 };
 
-function getConditionSvgPath(iconField) {
+function getConditionSvgPath(iconField, timestamp) {
   const raw = iconField.startsWith("mdi:") ? iconField.slice(4) : iconField;
   const key = MDI_TO_KEY[raw] || raw;
 
@@ -52,7 +52,8 @@ function getConditionSvgPath(iconField) {
     if (sunState.value === "below_horizon") {
       return "weather_icons/partly-cloudy-night.svg";
     }
-    const hour = new Date().getHours();
+    const date = timestamp ? new Date(timestamp) : new Date();
+    const hour = date.getHours();
     return hour >= 6 && hour < 20
       ? "weather_icons/partly-cloudy-day.svg"
       : "weather_icons/partly-cloudy-night.svg";
@@ -378,7 +379,7 @@ function updateCard(parameter, value, unit, timestamp, icon) {
     const fallback = document.getElementById(`${parameter}-icon-fallback`);
     if (value) {
       if (img) {
-        img.src = getConditionSvgPath(iconField);
+        img.src = getConditionSvgPath(iconField, timestamp);
         img.alt = value;
         img.classList.remove("weather-card__icon--hidden");
       }
