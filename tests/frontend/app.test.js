@@ -670,6 +670,15 @@ describe("alert", () => {
     vi.useRealTimers();
   });
 
+  it("sendAlertNotification uses Zielony label for null level", () => {
+    Notification.mockClear();
+    sendAlertNotification({ value: "brak zagrożeń", level: null, timestamp: "ts3", valid_to: "2099-01-01T00:00:00Z" });
+    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
+      body: expect.stringMatching(/Zielony alert: brak zagrożeń/),
+      tag: "ts3",
+    });
+  });
+
   it("requestNotificationPermission calls requestPermission when status is default", () => {
     Notification.permission = "default";
     Notification.requestPermission.mockClear();
