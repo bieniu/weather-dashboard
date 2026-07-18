@@ -68,10 +68,11 @@ async def async_client(
 
 @pytest.fixture(autouse=True)
 def _reset_ws_manager() -> None:
-    """Clear WebSocket connections before each test."""
-    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
+    """Clear WebSocket connections and sun state before each test."""
+    from app.mqtt_client import manager, sun_state  # ty: ignore[unresolved-import]
 
     manager.active_connections.clear()
+    sun_state["value"] = None
 
 
 @pytest.fixture
