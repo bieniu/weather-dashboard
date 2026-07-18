@@ -91,7 +91,7 @@ async def test_get_sensors_structure(async_client) -> None:
     resp = await async_client.get("/api/weather/sensors")
     data = resp.json()
     expected_sensors = {
-        "alert",
+        "alerts",
         "condition",
         "air_quality",
         "temperature",
@@ -131,14 +131,14 @@ async def test_get_alerts_filters_expired(async_client, db_session) -> None:
 
     now = datetime.now(UTC)
     valid = WeatherReading(
-        parameter="alert",
+        parameter="alerts",
         value_str="burze",
         level="yellow",
         valid_to=now + timedelta(hours=24),
         timestamp=now,
     )
     expired = WeatherReading(
-        parameter="alert",
+        parameter="alerts",
         value_str="stare",
         level="red",
         valid_to=now - timedelta(hours=1),
@@ -164,14 +164,14 @@ async def test_get_alerts_ordered_newest_first(async_client, db_session) -> None
 
     now = datetime.now(UTC)
     older = WeatherReading(
-        parameter="alert",
+        parameter="alerts",
         value_str="older",
         level="yellow",
         valid_to=now + timedelta(hours=24),
         timestamp=now - timedelta(hours=2),
     )
     newer = WeatherReading(
-        parameter="alert",
+        parameter="alerts",
         value_str="newer",
         level="orange",
         valid_to=now + timedelta(hours=24),

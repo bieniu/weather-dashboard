@@ -77,7 +77,7 @@ async def get_alerts(
     stmt = (
         select(WeatherReading)
         .where(
-            WeatherReading.parameter == "alert",
+            WeatherReading.parameter == "alerts",
             WeatherReading.valid_to > now,
         )
         .order_by(desc(WeatherReading.timestamp))

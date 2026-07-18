@@ -59,7 +59,7 @@ def test_alert_fields_serialization() -> None:
 
     data = WeatherReadingOut(
         id=4,
-        parameter="alert",
+        parameter="alerts",
         value=None,
         unit="",
         value_str="burze",
@@ -80,7 +80,7 @@ def test_alert_valid_to_none_serialization() -> None:
 
     data = WeatherReadingOut(
         id=5,
-        parameter="alert",
+        parameter="alerts",
         value=None,
         unit="",
         value_str="test",

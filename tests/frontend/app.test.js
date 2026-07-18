@@ -502,41 +502,41 @@ describe("alert", () => {
   });
 
   it("createCard creates hidden alert card with correct elements", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
-    expect(card.id).toBe("card-alert");
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
+    expect(card.id).toBe("card-alerts");
     expect(card.style.display).toBe("none");
-    expect(card.querySelector("#alert-icon-img")).toBeTruthy();
-    expect(card.querySelector("#alert-value")).toBeTruthy();
-    expect(card.querySelector("#alert-updated")).toBeTruthy();
+    expect(card.querySelector("#alerts-icon-img")).toBeTruthy();
+    expect(card.querySelector("#alerts-value")).toBeTruthy();
+    expect(card.querySelector("#alerts-updated")).toBeTruthy();
     expect(card.querySelector(".weather-card__header--condition")).toBeTruthy();
   });
 
   it("showAlertCard displays card with correct icon and value", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     showAlertCard({ value: "burze", level: "yellow", valid_to: "2026-07-18T19:00:00Z", updatedText: "Test" });
     expect(card.style.display).toBe("");
-    const img = document.getElementById("alert-icon-img");
+    const img = document.getElementById("alerts-icon-img");
     expect(img.src).toContain("alert-yellow.svg");
-    expect(document.getElementById("alert-value").textContent).toBe("burze");
+    expect(document.getElementById("alerts-value").textContent).toBe("burze");
   });
 
   it("showAlertCard falls back to yellow for unknown level", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     showAlertCard({ value: "test", level: "unknown", valid_to: "2026-07-18T19:00:00Z" });
-    const img = document.getElementById("alert-icon-img");
+    const img = document.getElementById("alerts-icon-img");
     expect(img.src).toContain("alert-yellow.svg");
   });
 
   it("hideAlertCard hides the card", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
     card.style.display = "";
 
@@ -545,8 +545,8 @@ describe("alert", () => {
   });
 
   it("updateAlertVisibility shows first valid alert", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     alerts.push(
@@ -554,12 +554,12 @@ describe("alert", () => {
       { value: "current", level: "orange", valid_to: "2099-01-01T00:00:00Z", updatedText: "" },
     );
     updateAlertVisibility();
-    expect(document.getElementById("alert-value").textContent).toBe("current");
+    expect(document.getElementById("alerts-value").textContent).toBe("current");
   });
 
   it("updateAlertVisibility removes expired alerts from array", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     alerts.push({ value: "old", level: "red", valid_to: "2020-01-01T00:00:00Z", updatedText: "" });
@@ -569,8 +569,8 @@ describe("alert", () => {
   });
 
   it("updateAlertVisibility hides card when no valid alerts", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
     card.style.display = "";
 
@@ -580,15 +580,15 @@ describe("alert", () => {
   });
 
   it("handleAlertUpdate adds new alert to front of array", () => {
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     handleAlertUpdate({ value: "new", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "2" });
     handleAlertUpdate({ value: "older", level: "red", valid_to: "2099-01-01T00:00:00Z", timestamp: "1" });
     expect(alerts.length).toBe(2);
     expect(alerts[0].value).toBe("older");
-    expect(document.getElementById("alert-value").textContent).toBe("older");
+    expect(document.getElementById("alerts-value").textContent).toBe("older");
   });
 
   it("handleAlertUpdate deduplicates by timestamp", () => {
@@ -623,12 +623,12 @@ describe("alert", () => {
   });
 
   it("updateCard returns early for alert sensor", () => {
-    sensorsConfig.alert = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensorsConfig.alert, 0);
+    sensorsConfig.alerts = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensorsConfig.alerts, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    updateCard("alert", "should-not-appear", null, "2026-06-23T12:00:00Z");
-    expect(document.getElementById("alert-value").textContent).toBe("--");
+    updateCard("alerts", "should-not-appear", null, "2026-06-23T12:00:00Z");
+    expect(document.getElementById("alerts-value").textContent).toBe("--");
   });
 
   it("WS message with alert parameter routes to handleAlertUpdate", () => {
@@ -636,14 +636,14 @@ describe("alert", () => {
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
     globalThis.WebSocket = vi.fn(function () { return wsMock; });
 
-    const sensor = { name: "Alerty", type: "alert" };
-    const card = createCard("alert", sensor, 0);
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     connectWebSocket();
     wsMock.onmessage({
       data: JSON.stringify({
-        parameter: "alert",
+        parameter: "alerts",
         value: "ws-alert",
         valid_to: "2099-01-01T00:00:00Z",
         level: "red",
@@ -652,7 +652,7 @@ describe("alert", () => {
     });
     expect(alerts.length).toBe(1);
     expect(alerts[0].value).toBe("ws-alert");
-    expect(document.getElementById("alert-value").textContent).toBe("ws-alert");
+    expect(document.getElementById("alerts-value").textContent).toBe("ws-alert");
     delete globalThis.WebSocket;
   });
 });

@@ -276,7 +276,7 @@ async def test_process_alert_message(monkeypatch, db_engine) -> None:
 
     message = MagicMock()
     message.topic = MagicMock()
-    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alert")
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
     message.payload = json.dumps(
         {
             "value": "burze",
@@ -298,7 +298,7 @@ async def test_process_alert_message(monkeypatch, db_engine) -> None:
         )
         row = result.fetchone()
     assert row is not None
-    assert row[0] == "alert"
+    assert row[0] == "alerts"
     assert row[1] is None
     assert row[2] == ""
     assert row[3] == "burze"
@@ -320,7 +320,7 @@ async def test_process_alert_invalid_level(monkeypatch, caplog, db_engine) -> No
 
     message = MagicMock()
     message.topic = MagicMock()
-    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alert")
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
     message.payload = json.dumps(
         {
             "value": "test",
@@ -355,7 +355,7 @@ async def test_process_alert_expired_valid_to(monkeypatch, caplog, db_engine) ->
 
     message = MagicMock()
     message.topic = MagicMock()
-    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alert")
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
     message.payload = json.dumps(
         {
             "value": "test",
@@ -401,7 +401,7 @@ async def test_process_alert_broadcasts(monkeypatch, db_engine) -> None:
 
     message = MagicMock()
     message.topic = MagicMock()
-    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alert")
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
     message.payload = json.dumps(
         {
             "value": "burze",
@@ -414,7 +414,7 @@ async def test_process_alert_broadcasts(monkeypatch, db_engine) -> None:
 
     expected = json.dumps(
         {
-            "parameter": "alert",
+            "parameter": "alerts",
             "value": "burze",
             "valid_to": "2026-06-23T18:00:00+00:00",
             "level": "yellow",

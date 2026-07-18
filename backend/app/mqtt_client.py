@@ -84,7 +84,7 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
 
     try:
         payload = json.loads(message.payload)
-        if sensor_type == "alert":
+        if sensor_type == "alerts":
             value_str, level, valid_to = _parse_alert_payload(payload, now)
             reading = WeatherReading(
                 parameter=parameter,
@@ -113,7 +113,7 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         db.add(reading)
         await db.commit()
 
-    if sensor_type == "alert":
+    if sensor_type == "alerts":
         await manager.broadcast(
             {
                 "parameter": parameter,

@@ -68,24 +68,24 @@ const alerts = [];
 let alertTimerId = null;
 
 function showAlertCard(alert) {
-  const card = document.getElementById("card-alert");
+  const card = document.getElementById("card-alerts");
   if (!card) return;
 
-  const img = document.getElementById("alert-icon-img");
+  const img = document.getElementById("alerts-icon-img");
   if (img) {
     img.src = ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
     img.alt = alert.level;
   }
-  const valueEl = document.getElementById("alert-value");
+  const valueEl = document.getElementById("alerts-value");
   if (valueEl) valueEl.textContent = alert.value;
-  const updatedEl = document.getElementById("alert-updated");
+  const updatedEl = document.getElementById("alerts-updated");
   if (updatedEl) updatedEl.textContent = alert.updatedText || "";
 
   card.style.display = "";
 }
 
 function hideAlertCard() {
-  const card = document.getElementById("card-alert");
+  const card = document.getElementById("card-alerts");
   if (card) card.style.display = "none";
 }
 
@@ -167,7 +167,7 @@ function createCard(sensorKey, sensor, index) {
     card.style.setProperty("--sensor-color", sensor.color);
   }
 
-  if (sensor.type === "alert") {
+  if (sensor.type === "alerts") {
     card.style.display = "none";
     card.innerHTML = `
       <div class="weather-card__header weather-card__header--condition">
@@ -296,7 +296,7 @@ function updateChartTheme() {
 
 function updateCard(parameter, value, unit, timestamp, icon) {
   const sensor = sensorsConfig[parameter];
-  if (!sensor || sensor.type === "alert") return;
+  if (!sensor || sensor.type === "alerts") return;
 
   const valueEl = document.getElementById(`${parameter}-value`);
   const updatedEl = document.getElementById(`${parameter}-updated`);
@@ -383,7 +383,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.parameter === "alert") {
+      if (data.parameter === "alerts") {
         handleAlertUpdate({
           value: data.value,
           valid_to: data.valid_to,

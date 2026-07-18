@@ -1,8 +1,8 @@
 topic_prefix: weather-dashboard
 
 sensors:
-  alert:
-    type: alert
+  alerts:
+    type: alerts
     name: Alerty meteorologiczne
   condition:
     type: condition
