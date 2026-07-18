@@ -113,10 +113,35 @@ function handleAlertUpdate(alertData) {
   const existing = alerts.find((a) => a.timestamp === alertData.timestamp);
   if (!existing) {
     alerts.unshift(alertData);
+    sendAlertNotification(alertData);
   } else {
     Object.assign(existing, alertData);
   }
   updateAlertVisibility();
+}
+
+function sendAlertNotification(alertData) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const levelLabel = { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] || alertData.level;
+  const validTo = new Date(alertData.valid_to);
+  const now = new Date();
+  const validToText =
+    validTo.getFullYear() === now.getFullYear() &&
+    validTo.getMonth() === now.getMonth() &&
+    validTo.getDate() === now.getDate()
+      ? validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
+      : `${validTo.toLocaleDateString("pl-PL", { day: "numeric", month: "long" })}, ${validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}`;
+  new Notification("Alert meteorologiczny", {
+    body: `${levelLabel} alert: ${alertData.value}\nWażny do: ${validToText}`,
+    tag: alertData.timestamp,
+  });
+}
+
+function requestNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "default") {
+    Notification.requestPermission();
+  }
 }
 
 async function loadAlerts() {
@@ -477,6 +502,8 @@ async function init() {
 
   connectWebSocket();
   initAnalytics();
+
+  document.addEventListener("click", requestNotificationPermission, { once: true });
 }
 
 document.addEventListener("DOMContentLoaded", init);
@@ -508,6 +535,8 @@ export {
   updateAlertVisibility,
   scheduleAlertCheck,
   handleAlertUpdate,
+  sendAlertNotification,
+  requestNotificationPermission,
   loadAlerts,
   API_BASE,
   HISTORY_HOURS,

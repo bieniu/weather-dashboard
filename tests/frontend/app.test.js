@@ -25,6 +25,8 @@ import {
   hideAlertCard,
   updateAlertVisibility,
   handleAlertUpdate,
+  sendAlertNotification,
+  requestNotificationPermission,
   loadAlerts,
   API_BASE,
   HISTORY_HOURS,
@@ -596,6 +598,69 @@ describe("alert", () => {
     handleAlertUpdate({ value: "second", level: "red", valid_to: "2099-01-01T00:00:00Z", timestamp: "same" });
     expect(alerts.length).toBe(1);
     expect(alerts[0].value).toBe("second");
+  });
+
+  it("sendAlertNotification does nothing when permission is denied", () => {
+    const origPerm = Notification.permission;
+    Notification.permission = "denied";
+    Notification.mockClear();
+    sendAlertNotification({ value: "test", level: "red", timestamp: "1" });
+    expect(Notification).not.toHaveBeenCalled();
+    Notification.permission = origPerm;
+  });
+
+  it("sendAlertNotification does nothing when Notification API is unavailable", () => {
+    const orig = globalThis.Notification;
+    delete globalThis.Notification;
+    expect(() => sendAlertNotification({ value: "test", level: "red", timestamp: "1" })).not.toThrow();
+    globalThis.Notification = orig;
+  });
+
+  it("sendAlertNotification fires Notification with correct title and body", () => {
+    Notification.mockClear();
+    sendAlertNotification({ value: "burze", level: "orange", timestamp: "ts1", valid_to: "2099-01-01T00:00:00Z" });
+    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
+      body: expect.stringMatching(/Pomarańczowy: burze\nWażny do: 1 stycznia, \d{2}:\d{2}/),
+      tag: "ts1",
+    });
+  });
+
+  it("sendAlertNotification shows only time for today expiry", () => {
+    Notification.mockClear();
+    const future = new Date();
+    future.setHours(future.getHours() + 3);
+    const iso = future.toISOString();
+    sendAlertNotification({ value: "mgła", level: "yellow", timestamp: "ts2", valid_to: iso });
+    const callBody = Notification.mock.calls[0][1].body;
+    expect(callBody).toContain("Żółty: mgła");
+    expect(callBody).toContain("Ważny do:");
+    expect(callBody).not.toContain(","); // no comma = date part omitted
+  });
+
+  it("requestNotificationPermission calls requestPermission when status is default", () => {
+    Notification.permission = "default";
+    Notification.requestPermission.mockClear();
+    requestNotificationPermission();
+    expect(Notification.requestPermission).toHaveBeenCalled();
+  });
+
+  it("requestNotificationPermission does nothing when permission is already granted", () => {
+    Notification.permission = "granted";
+    Notification.requestPermission.mockClear();
+    requestNotificationPermission();
+    expect(Notification.requestPermission).not.toHaveBeenCalled();
+  });
+
+  it("requestNotificationPermission does nothing when Notification API is unavailable", () => {
+    const orig = globalThis.Notification;
+    delete globalThis.Notification;
+    expect(() => requestNotificationPermission()).not.toThrow();
+    globalThis.Notification = orig;
+  });
+
+  it("handleAlertUpdate sends notification for new alerts", () => {
+    handleAlertUpdate({ value: "test", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "notif1" });
+    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", expect.objectContaining({ body: expect.stringContaining("test") }));
   });
 
   it("loadAlerts fetches alerts and populates the array", async () => {
