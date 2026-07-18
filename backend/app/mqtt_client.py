@@ -31,6 +31,8 @@ def _parse_alert_payload(payload: dict, now: datetime) -> tuple[str, str, dateti
     valid_to = datetime.fromisoformat(payload["valid_to"])
     if valid_to.tzinfo is None:
         valid_to = valid_to.replace(tzinfo=UTC)
+    else:
+        valid_to = valid_to.astimezone(UTC)
     max_valid = now + timedelta(hours=MAX_ALERT_VALID_HOURS)
     if valid_to <= now or valid_to > max_valid:
         msg = f"valid_to out of range: {valid_to}"
