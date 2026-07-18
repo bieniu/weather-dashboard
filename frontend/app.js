@@ -122,7 +122,9 @@ function handleAlertUpdate(alertData) {
 
 function sendAlertNotification(alertData) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const levelLabel = { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] || alertData.level;
+  const levelLabel =
+    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] ||
+    alertData.level;
   const validTo = new Date(alertData.valid_to);
   const now = new Date();
   const validToText =
