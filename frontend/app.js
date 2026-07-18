@@ -345,7 +345,7 @@ async function loadHistory(parameter) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
 
-    if (sensor?.type === "alert") return;
+    if (sensor?.type === "alerts") return;
 
     if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
@@ -464,7 +464,7 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    if (sensor.type !== "condition" && sensor.type !== "text" && sensor.type !== "alert") {
+    if (sensor.type !== "condition" && sensor.type !== "text" && sensor.type !== "alerts") {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     }
     idx++;
