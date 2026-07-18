@@ -66,6 +66,7 @@ const ALERT_ICONS = {
   orange: "weather_icons/alert-orange.svg",
   red: "weather_icons/alert-red.svg",
 };
+const ALERT_GREEN_ICON = "weather_icons/alert-green.svg";
 
 const charts = {};
 let sensorsConfig = {};
@@ -81,8 +82,9 @@ function showAlertCard(alert) {
 
   const img = document.getElementById("alerts-icon-img");
   if (img) {
-    img.src = ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
-    img.alt = alert.level;
+    img.src =
+      alert.level == null ? ALERT_GREEN_ICON : ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
+    img.alt = alert.level ?? "green";
   }
   const valueEl = document.getElementById("alerts-value");
   if (valueEl) valueEl.textContent = alert.value;
@@ -131,8 +133,9 @@ function handleAlertUpdate(alertData) {
 function sendAlertNotification(alertData) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const levelLabel =
-    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" }[alertData.level] ||
-    alertData.level;
+    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony", null: "Zielony" }[
+      alertData.level
+    ] || alertData.level;
   const validTo = new Date(alertData.valid_to);
   const now = new Date();
   const validToText =
@@ -572,6 +575,7 @@ export {
   sunState,
   alertTimerId,
   ALERT_ICONS,
+  ALERT_GREEN_ICON,
   showAlertCard,
   hideAlertCard,
   updateAlertVisibility,

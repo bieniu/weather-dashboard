@@ -22,6 +22,7 @@ import {
   sunState,
   alerts,
   ALERT_ICONS,
+  ALERT_GREEN_ICON,
   showAlertCard,
   hideAlertCard,
   updateAlertVisibility,
@@ -520,6 +521,7 @@ describe("alert", () => {
     expect(ALERT_ICONS.yellow).toBe("weather_icons/alert-yellow.svg");
     expect(ALERT_ICONS.orange).toBe("weather_icons/alert-orange.svg");
     expect(ALERT_ICONS.red).toBe("weather_icons/alert-red.svg");
+    expect(ALERT_GREEN_ICON).toBe("weather_icons/alert-green.svg");
   });
 
   it("createCard creates hidden alert card with correct elements", () => {
@@ -553,6 +555,18 @@ describe("alert", () => {
     showAlertCard({ value: "test", level: "unknown", valid_to: "2026-07-18T19:00:00Z" });
     const img = document.getElementById("alerts-icon-img");
     expect(img.src).toContain("alert-yellow.svg");
+  });
+
+  it("showAlertCard uses green icon for null level", () => {
+    const sensor = { name: "Alerty", type: "alerts" };
+    const card = createCard("alerts", sensor, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    showAlertCard({ value: "brak zagrożeń", level: null, valid_to: "2026-07-18T19:00:00Z", updatedText: "Test" });
+    expect(card.style.display).toBe("");
+    const img = document.getElementById("alerts-icon-img");
+    expect(img.src).toContain("alert-green.svg");
+    expect(document.getElementById("alerts-value").textContent).toBe("brak zagrożeń");
   });
 
   it("hideAlertCard hides the card", () => {

@@ -307,6 +307,48 @@ async def test_process_alert_message(monkeypatch, db_engine) -> None:
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_alert_null_level(monkeypatch, db_engine) -> None:
+    """An alert with null level is persisted with level=None."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/alerts")
+    message.payload = json.dumps(
+        {
+            "value": "brak zagrożeń",
+            "valid_to": "2026-06-23 18:00:00+00:00",
+            "level": None,
+        }
+    ).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    await _process_mqtt_message(message)
+
+    async with db_engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT parameter, value, unit, value_str, level, valid_to "
+                "FROM weather_readings"
+            )
+        )
+        row = result.fetchone()
+    assert row is not None
+    assert row[0] == "alerts"
+    assert row[1] is None
+    assert row[2] == ""
+    assert row[3] == "brak zagrożeń"
+    assert row[4] is None
+    assert row[5] is not None
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_alert_invalid_level(monkeypatch, caplog, db_engine) -> None:
     """An alert with invalid level is rejected and not persisted."""
     import logging
@@ -479,7 +521,10 @@ async def test_process_sun_message_broadcasts(monkeypatch, db_engine) -> None:
     )
     monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
 
-    from app.mqtt_client import WebSocketManager, sun_state  # ty: ignore[unresolved-import]
+    from app.mqtt_client import (  # ty: ignore[unresolved-import]
+        WebSocketManager,
+        sun_state,
+    )
 
     ws = AsyncMock()
 
@@ -498,11 +543,13 @@ async def test_process_sun_message_broadcasts(monkeypatch, db_engine) -> None:
     await mqtt_mod._process_mqtt_message(message)
 
     assert sun_state["value"] == "above_horizon"
-    expected = json.dumps({
-        "parameter": "sun",
-        "value": "above_horizon",
-        "timestamp": "2026-06-23T12:00:00+00:00",
-    })
+    expected = json.dumps(
+        {
+            "parameter": "sun",
+            "value": "above_horizon",
+            "timestamp": "2026-06-23T12:00:00+00:00",
+        }
+    )
     ws.send_text.assert_awaited_once_with(expected)
 
     monkeypatch.setattr(mqtt_mod, "manager", original_manager)
@@ -518,7 +565,10 @@ async def test_process_sun_message_below_horizon(monkeypatch, db_engine) -> None
     )
     monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
 
-    from app.mqtt_client import WebSocketManager, sun_state  # ty: ignore[unresolved-import]
+    from app.mqtt_client import (  # ty: ignore[unresolved-import]
+        WebSocketManager,
+        sun_state,
+    )
 
     ws = AsyncMock()
 
@@ -537,11 +587,13 @@ async def test_process_sun_message_below_horizon(monkeypatch, db_engine) -> None
     await mqtt_mod._process_mqtt_message(message)
 
     assert sun_state["value"] == "below_horizon"
-    expected = json.dumps({
-        "parameter": "sun",
-        "value": "below_horizon",
-        "timestamp": "2026-06-23T12:00:00+00:00",
-    })
+    expected = json.dumps(
+        {
+            "parameter": "sun",
+            "value": "below_horizon",
+            "timestamp": "2026-06-23T12:00:00+00:00",
+        }
+    )
     ws.send_text.assert_awaited_once_with(expected)
 
     monkeypatch.setattr(mqtt_mod, "manager", original_manager)
@@ -589,7 +641,10 @@ async def test_load_sun_state_from_db(monkeypatch, db_engine) -> None:
     )
     monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
 
-    from app.mqtt_client import _load_sun_state, sun_state  # ty: ignore[unresolved-import]
+    from app.mqtt_client import (  # ty: ignore[unresolved-import]
+        _load_sun_state,
+        sun_state,
+    )
 
     now = datetime.now(UTC)
     async with db_engine.connect() as conn:
@@ -598,7 +653,12 @@ async def test_load_sun_state_from_db(monkeypatch, db_engine) -> None:
                 "INSERT INTO weather_readings (parameter, value_str, unit, timestamp) "
                 "VALUES (:param, :val, :unit, :ts)"
             ),
-            {"param": "sun", "val": "below_horizon", "unit": "", "ts": now - timedelta(hours=1)},
+            {
+                "param": "sun",
+                "val": "below_horizon",
+                "unit": "",
+                "ts": now - timedelta(hours=1),
+            },
         )
         await conn.execute(
             text(
@@ -623,7 +683,10 @@ async def test_load_sun_state_no_data(monkeypatch, db_engine) -> None:
     )
     monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
 
-    from app.mqtt_client import _load_sun_state, sun_state  # ty: ignore[unresolved-import]
+    from app.mqtt_client import (  # ty: ignore[unresolved-import]
+        _load_sun_state,
+        sun_state,
+    )
 
     sun_state["value"] = "above_horizon"
     await _load_sun_state()
