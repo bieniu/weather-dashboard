@@ -358,6 +358,12 @@ body {
 /* =============================================
    Responsive
    ============================================= */
+@media (min-width: 860px) {
+  #card-alerts {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 640px) {
   .grid {
     grid-template-columns: 1fr;
