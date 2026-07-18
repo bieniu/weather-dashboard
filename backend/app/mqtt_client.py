@@ -93,12 +93,12 @@ async def _process_sun_message(message: aiomqtt.Message) -> None:
         logger.warning("Invalid sun value: %s", value)
         return
 
-    sun_state["value"] = value
-
     reading = WeatherReading(parameter="sun", value_str=value, timestamp=now)
     async with SessionLocal() as db:
         db.add(reading)
         await db.commit()
+
+    sun_state["value"] = value
 
     await manager.broadcast(
         {
@@ -218,7 +218,12 @@ async def mqtt_listener() -> None:
                 )
 
                 async for message in client.messages:
-                    await _process_mqtt_message(message)
+                    try:
+                        await _process_mqtt_message(message)
+                    except Exception:
+                        logger.exception(
+                            "Error processing message on topic %s", message.topic
+                        )
 
         except aiomqtt.MqttError as e:
             logger.warning("Connection error: %s. Retrying in 5s...", e)

@@ -154,6 +154,25 @@ function requestNotificationPermission() {
   }
 }
 
+async function loadSunState() {
+  try {
+    const res = await fetch(`${API_BASE}/sun`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.value === "above_horizon" || data.value === "below_horizon") {
+      sunState.value = data.value;
+      for (const [param, sensor] of Object.entries(sensorsConfig)) {
+        if (sensor.type === "condition" && conditionIconMap[param]) {
+          const img = document.getElementById(`${param}-icon-img`);
+          if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[Sun] Error loading sun state:", err);
+  }
+}
+
 async function loadAlerts() {
   try {
     const res = await fetch(`${API_BASE}/alerts`);
@@ -520,6 +539,7 @@ async function init() {
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   loadAlerts();
+  loadSunState();
   scheduleAlertCheck();
   connectWebSocket();
   initAnalytics();
@@ -560,6 +580,7 @@ export {
   sendAlertNotification,
   requestNotificationPermission,
   loadAlerts,
+  loadSunState,
   API_BASE,
   HISTORY_HOURS,
   MAX_CHART_POINTS,
