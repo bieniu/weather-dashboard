@@ -3,6 +3,7 @@
 import os
 from typing import TYPE_CHECKING
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 if TYPE_CHECKING:
@@ -20,9 +21,17 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
-    """Create all database tables."""
+    """Create all database tables and apply migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Migration: add level column if missing (added after initial deployment)
+        result = await conn.execute(text("PRAGMA table_info(weather_readings)"))
+        columns = {row[1] for row in result.fetchall()}
+        if "level" not in columns:
+            await conn.execute(
+                text("ALTER TABLE weather_readings ADD COLUMN level VARCHAR(20)")
+            )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
