@@ -620,21 +620,21 @@ describe("alert", () => {
     Notification.mockClear();
     sendAlertNotification({ value: "burze", level: "orange", timestamp: "ts1", valid_to: "2099-01-01T00:00:00Z" });
     expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
-      body: expect.stringMatching(/Pomarańczowy: burze\nWażny do: 1 stycznia, \d{2}:\d{2}/),
+      body: expect.stringMatching(/Pomarańczowy alert: burze\nWażny do: 1 stycznia, \d{2}:\d{2}/),
       tag: "ts1",
     });
   });
 
   it("sendAlertNotification shows only time for today expiry", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-23T12:00:00Z"));
     Notification.mockClear();
-    const future = new Date();
-    future.setHours(future.getHours() + 3);
-    const iso = future.toISOString();
-    sendAlertNotification({ value: "mgła", level: "yellow", timestamp: "ts2", valid_to: iso });
+    sendAlertNotification({ value: "mgła", level: "yellow", timestamp: "ts2", valid_to: "2026-06-23T15:00:00Z" });
     const callBody = Notification.mock.calls[0][1].body;
-    expect(callBody).toContain("Żółty: mgła");
+    expect(callBody).toContain("Żółty alert: mgła");
     expect(callBody).toContain("Ważny do:");
-    expect(callBody).not.toContain(","); // no comma = date part omitted
+    expect(callBody).not.toContain(",");
+    vi.useRealTimers();
   });
 
   it("requestNotificationPermission calls requestPermission when status is default", () => {

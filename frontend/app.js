@@ -365,12 +365,12 @@ function appendChartPoint(parameter, value, timestamp) {
 async function loadHistory(parameter) {
   try {
     const sensor = sensorsConfig[parameter];
+    if (sensor?.type === "alerts") return;
+
     const hours = sensor?.history_hours ?? HISTORY_HOURS;
     const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
-
-    if (sensor?.type === "alerts") return;
 
     if (sensor?.type === "condition" || sensor?.type === "text") {
       if (history.length > 0) {
@@ -497,9 +497,8 @@ async function init() {
 
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
-  await loadAlerts();
+  loadAlerts();
   scheduleAlertCheck();
-
   connectWebSocket();
   initAnalytics();
 
