@@ -34,6 +34,12 @@ sensors:
     color: "#009688"
     round: 0
     unit: hPa
+  precipitation_probability:
+    name: Prawdopodobieństwo opadów
+    icon: mdi:umbrella
+    color: "#2196F3"
+    round: 0
+    unit: "%"
   pm1:
     name: Pył zawieszony PM1
     icon: mdi:air

@@ -57,3 +57,6 @@ lint.per-file-ignores = {"tests/backend/*" = [
 
 [tool.ty.environment]
 python-version = "3.14"
+
+[tool.ty.src]
+include = ["backend"]

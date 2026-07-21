@@ -206,9 +206,7 @@ async def test_get_sun_with_data(async_client, db_session) -> None:
     from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     now = datetime.now(UTC)
-    older = WeatherReading(
-        parameter="sun", value_str="below_horizon", timestamp=now
-    )
+    older = WeatherReading(parameter="sun", value_str="below_horizon", timestamp=now)
     newer = WeatherReading(
         parameter="sun",
         value_str="above_horizon",
