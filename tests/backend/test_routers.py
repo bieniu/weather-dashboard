@@ -101,6 +101,7 @@ async def test_get_sensors_structure(async_client) -> None:
         "pm1",
         "pm10",
         "pm25",
+        "precipitation_probability",
         "water_level",
     }
     assert set(data.keys()) == expected_sensors
