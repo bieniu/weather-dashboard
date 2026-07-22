@@ -58,7 +58,7 @@ repos:
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=tekst
+          - --ignore-words-list=tekst,nd
           - --skip="./.*"
           - --quiet-level=2
         exclude_types: [csv, json]

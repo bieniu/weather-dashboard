@@ -93,6 +93,7 @@ async def test_get_sensors_structure(async_client) -> None:
     expected_sensors = {
         "alerts",
         "condition",
+        "forecast",
         "air_quality",
         "temperature",
         "apparent_temperature",
@@ -222,6 +223,45 @@ async def test_get_sun_with_data(async_client, db_session) -> None:
     assert data["value"] == "above_horizon"
     assert data["timestamp"] == "2026-06-23T12:00:00+00:00"
     assert data["parameter"] == "sun"
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_forecast_empty(async_client) -> None:
+    """GET /api/weather/forecast returns [] when no data exists."""
+    resp = await async_client.get("/api/weather/forecast")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_forecast_with_data(async_client, db_session) -> None:
+    """GET /api/weather/forecast returns parsed forecast array."""
+    import json
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    forecast_data = [
+        {
+            "datetime": "2026-07-23T00:00:00+00:00",
+            "condition": "cloudy",
+            "temperature": 22.0,
+            "precipitation": 0.0,
+            "is_daytime": True,
+        },
+    ]
+    now = datetime.now(UTC)
+    reading = WeatherReading(
+        parameter="forecast",
+        value_str=json.dumps(forecast_data),
+        timestamp=now,
+    )
+    db_session.add(reading)
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/forecast")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data == forecast_data
 
 
 async def test_get_analytics_disabled(async_client) -> None:

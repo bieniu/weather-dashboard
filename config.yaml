@@ -7,6 +7,9 @@ sensors:
   air_quality:
     type: text
     name: Jakość powietrza
+  forecast:
+    type: forecast
+    name: Prognoza
   alerts:
     type: alerts
     name: Alerty meteorologiczne

@@ -115,6 +115,38 @@ async def _process_sun_message(message: aiomqtt.Message) -> None:
     )
 
 
+async def _process_forecast_message(
+    message: aiomqtt.Message, topic: str, parameter: str, now: datetime
+) -> None:
+    """Handle a forecast MQTT message, persist to DB and broadcast."""
+    try:
+        payload = json.loads(message.payload)
+    except json.JSONDecodeError as e:
+        logger.warning("Payload parse error on topic %s: %s", topic, e)
+        return
+
+    if not isinstance(payload, list):
+        logger.warning("Forecast payload on topic %s is not a list", topic)
+        return
+
+    reading = WeatherReading(
+        parameter=parameter,
+        value_str=json.dumps(payload),
+        timestamp=now,
+    )
+    async with SessionLocal() as db:
+        db.add(reading)
+        await db.commit()
+
+    await manager.broadcast(
+        {
+            "parameter": parameter,
+            "value": payload,
+            "timestamp": now.isoformat(),
+        }
+    )
+
+
 async def _load_sun_state() -> None:
     """Load the latest sun state from the database on startup."""
     async with SessionLocal() as db:
@@ -134,6 +166,8 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
     """Parse, persist and broadcast a single MQTT message."""
     topic = str(message.topic)
 
+    now = datetime.now(UTC)
+
     if topic == SUN_TOPIC:
         await _process_sun_message(message)
         return
@@ -143,7 +177,10 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         return  # unknown topic — ignore
 
     sensor_type = settings.sensors[parameter].type
-    now = datetime.now(UTC)
+
+    if sensor_type == "forecast":
+        await _process_forecast_message(message, topic, parameter, now)
+        return
 
     try:
         payload = json.loads(message.payload)
