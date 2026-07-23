@@ -938,13 +938,13 @@ describe("forecast", () => {
   ];
 
   it("getPolishDayAbbr returns correct Polish abbreviations", () => {
-    expect(getPolishDayAbbr(new Date("2026-07-20"))).toBe("pn"); // Monday
-    expect(getPolishDayAbbr(new Date("2026-07-21"))).toBe("wt"); // Tuesday
-    expect(getPolishDayAbbr(new Date("2026-07-22"))).toBe("śr"); // Wednesday
-    expect(getPolishDayAbbr(new Date("2026-07-23"))).toBe("cz"); // Thursday
-    expect(getPolishDayAbbr(new Date("2026-07-24"))).toBe("pt"); // Friday
-    expect(getPolishDayAbbr(new Date("2026-07-25"))).toBe("sb"); // Saturday
-    expect(getPolishDayAbbr(new Date("2026-07-26"))).toBe("nd"); // Sunday
+    expect(getPolishDayAbbr(new Date("2026-07-20"))).toBe("poniedziałek");
+    expect(getPolishDayAbbr(new Date("2026-07-21"))).toBe("wtorek");
+    expect(getPolishDayAbbr(new Date("2026-07-22"))).toBe("środa");
+    expect(getPolishDayAbbr(new Date("2026-07-23"))).toBe("czwartek");
+    expect(getPolishDayAbbr(new Date("2026-07-24"))).toBe("piątek");
+    expect(getPolishDayAbbr(new Date("2026-07-25"))).toBe("sobota");
+    expect(getPolishDayAbbr(new Date("2026-07-26"))).toBe("niedziela");
   });
 
   it("getConditionSvgPath uses isDaytime parameter for partlycloudy", () => {
@@ -986,19 +986,19 @@ describe("forecast", () => {
     const cols = card.querySelectorAll(".forecast-col");
 
     // Item index 1 (first displayed): nighttime rainy
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("cz");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
     expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("noc");
     expect(cols[0].querySelector(".forecast-col__temp").textContent).toBe("21°C");
     expect(cols[0].querySelector(".forecast-col__precip").textContent).toBe("0 mm");
 
     // Item index 3 (third displayed): nighttime rainy
-    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("pt");
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("noc");
     expect(cols[2].querySelector(".forecast-col__temp").textContent).toBe("18°C");
     expect(cols[2].querySelector(".forecast-col__precip").textContent).toBe("1 mm");
 
     // Item index 4 (fourth displayed): daytime rainy
-    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("pt");
+    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("dzień");
     expect(cols[3].querySelector(".forecast-col__temp").textContent).toBe("22°C");
     expect(cols[3].querySelector(".forecast-col__precip").textContent).toBe("2 mm");
@@ -1052,7 +1052,7 @@ describe("forecast", () => {
     await loadForecast();
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("cz");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
     expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
 
     delete sensorsConfig.forecast;
@@ -1105,7 +1105,7 @@ describe("forecast", () => {
     });
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("cz");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
     expect(cols[1].querySelector(".forecast-col__temp").textContent).toBe("20°C");
     delete globalThis.WebSocket;
     delete sensorsConfig.forecast;
