@@ -11,7 +11,6 @@
   --color-accent-subtle: #fef3c7;
   --color-success: #16a34a;
   --color-error: #dc2626;
-  --color-forecast-col-bg: #e2e8f0;
 
   --font-display: "Sora", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -33,7 +32,6 @@
   --color-accent-subtle: #78350f;
   --color-success: #22c55e;
   --color-error: #ef4444;
-  --color-forecast-col-bg: #1e293b;
 }
 
 /* =============================================
@@ -380,7 +378,6 @@ body {
   gap: 2px;
   padding: 8px 4px;
   border-radius: 6px;
-  background: var(--color-forecast-col-bg);
   transition: background 0.3s ease;
 }
 
@@ -401,8 +398,8 @@ body {
 }
 
 .forecast-col__icon {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 3.125rem;
+  height: 3.125rem;
   object-fit: contain;
 }
 
