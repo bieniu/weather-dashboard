@@ -960,7 +960,7 @@ describe("forecast", () => {
   it("createCard creates forecast card with 4 columns and no header icon", () => {
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     expect(card.id).toBe("card-forecast");
-    expect(card.querySelector(".material-symbols-rounded")).toBeNull();
+    expect(card.querySelector(".weather-card__header .material-symbols-rounded")).toBeNull();
     expect(card.querySelector(".weather-card__label")).toBeTruthy();
     expect(card.querySelectorAll(".forecast-col")).toHaveLength(4);
     expect(card.querySelector(".forecast-grid")).toBeTruthy();
@@ -972,8 +972,9 @@ describe("forecast", () => {
     expect(col.querySelector(".forecast-col__day")).toBeTruthy();
     expect(col.querySelector(".forecast-col__period")).toBeTruthy();
     expect(col.querySelector(".forecast-col__icon")).toBeTruthy();
-    expect(col.querySelector(".forecast-col__temp")).toBeTruthy();
-    expect(col.querySelector(".forecast-col__precip")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__temp-value")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__precip-value")).toBeTruthy();
+    expect(col.querySelectorAll(".material-symbols-rounded")).toHaveLength(2);
   });
 
   it("updateCard populates forecast columns with data items 1-4", () => {
@@ -988,20 +989,20 @@ describe("forecast", () => {
     // Item index 1 (first displayed): nighttime rainy
     expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
     expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("noc");
-    expect(cols[0].querySelector(".forecast-col__temp").textContent).toBe("21°C");
-    expect(cols[0].querySelector(".forecast-col__precip").textContent).toBe("0 mm");
+    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
 
     // Item index 3 (third displayed): nighttime rainy
     expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("noc");
-    expect(cols[2].querySelector(".forecast-col__temp").textContent).toBe("18°C");
-    expect(cols[2].querySelector(".forecast-col__precip").textContent).toBe("1 mm");
+    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
+    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
 
     // Item index 4 (fourth displayed): daytime rainy
     expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("dzień");
-    expect(cols[3].querySelector(".forecast-col__temp").textContent).toBe("22°C");
-    expect(cols[3].querySelector(".forecast-col__precip").textContent).toBe("2 mm");
+    expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
+    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
 
     delete sensorsConfig.forecast;
   });
@@ -1106,8 +1107,23 @@ describe("forecast", () => {
 
     const cols = card.querySelectorAll(".forecast-col");
     expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
-    expect(cols[1].querySelector(".forecast-col__temp").textContent).toBe("20°C");
+    expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
     delete globalThis.WebSocket;
+    delete sensorsConfig.forecast;
+  });
+
+  it("icons thermometer and water_drop are present in forecast columns", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const cols = card.querySelectorAll(".forecast-col");
+    for (const col of cols) {
+      const icons = col.querySelectorAll(".forecast-col__val-icon");
+      expect(icons).toHaveLength(2);
+      expect(icons[0].textContent).toBe("thermometer");
+      expect(icons[1].textContent).toBe("water_drop");
+    }
     delete sensorsConfig.forecast;
   });
 
@@ -1120,9 +1136,9 @@ describe("forecast", () => {
 
     const cols = card.querySelectorAll(".forecast-col");
     // Item index 4: precipitation 2.0 → "2 mm"
-    expect(cols[3].querySelector(".forecast-col__precip").textContent).toBe("2 mm");
+    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
     // Item index 1: precipitation 0.1 → "0 mm"
-    expect(cols[0].querySelector(".forecast-col__precip").textContent).toBe("0 mm");
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
 
     delete sensorsConfig.forecast;
   });

@@ -412,12 +412,30 @@ body {
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .forecast-col__precip {
   font-size: 0.6875rem;
   color: var(--color-text-secondary);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.forecast-col__val-icon {
+  color: var(--color-text-secondary);
+}
+
+.forecast-col__temp .forecast-col__val-icon {
+  font-size: 1rem;
+}
+
+.forecast-col__precip .forecast-col__val-icon {
+  font-size: 0.75rem;
 }
 
 #card-forecast .weather-card__updated {

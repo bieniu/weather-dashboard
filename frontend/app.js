@@ -277,29 +277,29 @@ function createCard(sensorKey, sensor, index) {
           <div class="forecast-col__day">--</div>
           <div class="forecast-col__period">--</div>
           <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp">--</div>
-          <div class="forecast-col__precip">--</div>
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
           <div class="forecast-col__period">--</div>
           <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp">--</div>
-          <div class="forecast-col__precip">--</div>
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
           <div class="forecast-col__period">--</div>
           <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp">--</div>
-          <div class="forecast-col__precip">--</div>
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
           <div class="forecast-col__period">--</div>
           <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp">--</div>
-          <div class="forecast-col__precip">--</div>
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
         </div>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
@@ -441,8 +441,9 @@ function updateCard(parameter, value, unit, timestamp, icon) {
       const img = col.querySelector(".forecast-col__icon");
       img.src = getConditionSvgPath(item.condition, item.datetime, item.is_daytime);
       img.alt = item.condition;
-      col.querySelector(".forecast-col__temp").textContent = `${Math.round(item.temperature)}°C`;
-      col.querySelector(".forecast-col__precip").textContent =
+      col.querySelector(".forecast-col__temp-value").textContent =
+        `${Math.round(item.temperature)}°C`;
+      col.querySelector(".forecast-col__precip-value").textContent =
         `${Math.round(item.precipitation)} mm`;
     }
   } else if (sensor.type === "condition" || sensor.type === "text") {
