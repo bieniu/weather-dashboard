@@ -279,6 +279,7 @@ function createCard(sensorKey, sensor, index) {
           <img class="forecast-col__icon" src="" alt="">
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
@@ -286,6 +287,7 @@ function createCard(sensorKey, sensor, index) {
           <img class="forecast-col__icon" src="" alt="">
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
@@ -293,6 +295,7 @@ function createCard(sensorKey, sensor, index) {
           <img class="forecast-col__icon" src="" alt="">
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
@@ -300,6 +303,7 @@ function createCard(sensorKey, sensor, index) {
           <img class="forecast-col__icon" src="" alt="">
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
         </div>
         <div class="forecast-col">
           <div class="forecast-col__day">--</div>
@@ -307,6 +311,7 @@ function createCard(sensorKey, sensor, index) {
           <img class="forecast-col__icon" src="" alt="">
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
         </div>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
@@ -452,6 +457,8 @@ function updateCard(parameter, value, unit, timestamp, icon) {
         `${Math.round(item.temperature)}°C`;
       col.querySelector(".forecast-col__precip-value").textContent =
         `${Math.round(item.precipitation)} mm`;
+      col.querySelector(".forecast-col__cloud-value").textContent =
+        `${Math.round(item.cloud_coverage)}%`;
     }
   } else if (sensor.type === "condition" || sensor.type === "text") {
     if (valueEl) valueEl.textContent = value ?? "—";

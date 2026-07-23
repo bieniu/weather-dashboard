@@ -929,12 +929,12 @@ describe("forecast", () => {
   };
 
   const FORECAST_DATA = [
-    { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: 23.1, precipitation: 0.0 },
-    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 20.5, precipitation: 0.1 },
-    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: true, condition: "partlycloudy", temperature: 20.2, precipitation: 1.6 },
-    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 17.9, precipitation: 0.6 },
-    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: true, condition: "rainy", temperature: 21.7, precipitation: 2.0 },
-    { datetime: "2026-07-25T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 20.3, precipitation: 0.0 },
+    { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: 23.1, precipitation: 0.0, cloud_coverage: 75 },
+    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 20.5, precipitation: 0.1, cloud_coverage: 90 },
+    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: true, condition: "partlycloudy", temperature: 20.2, precipitation: 1.6, cloud_coverage: 50 },
+    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 17.9, precipitation: 0.6, cloud_coverage: 85 },
+    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: true, condition: "rainy", temperature: 21.7, precipitation: 2.0, cloud_coverage: 60 },
+    { datetime: "2026-07-25T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 20.3, precipitation: 0.0, cloud_coverage: 30 },
   ];
 
   it("getPolishDayAbbr returns correct Polish abbreviations", () => {
@@ -957,12 +957,12 @@ describe("forecast", () => {
     expect(getConditionSvgPath("cloudy", null, false)).toBe("weather_icons/cloudy.svg");
   });
 
-  it("createCard creates forecast card with 4 columns and no header icon", () => {
+  it("createCard creates forecast card with 5 columns and no header icon", () => {
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     expect(card.id).toBe("card-forecast");
     expect(card.querySelector(".weather-card__header .material-symbols-rounded")).toBeNull();
     expect(card.querySelector(".weather-card__label")).toBeTruthy();
-    expect(card.querySelectorAll(".forecast-col")).toHaveLength(4);
+    expect(card.querySelectorAll(".forecast-col")).toHaveLength(5);
     expect(card.querySelector(".forecast-grid")).toBeTruthy();
   });
 
@@ -974,10 +974,11 @@ describe("forecast", () => {
     expect(col.querySelector(".forecast-col__icon")).toBeTruthy();
     expect(col.querySelector(".forecast-col__temp-value")).toBeTruthy();
     expect(col.querySelector(".forecast-col__precip-value")).toBeTruthy();
-    expect(col.querySelectorAll(".material-symbols-rounded")).toHaveLength(2);
+    expect(col.querySelector(".forecast-col__cloud-value")).toBeTruthy();
+    expect(col.querySelectorAll(".material-symbols-rounded")).toHaveLength(3);
   });
 
-  it("updateCard populates forecast columns with data items 1-4", () => {
+  it("updateCard populates forecast columns with data items 1-5", () => {
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
@@ -991,18 +992,28 @@ describe("forecast", () => {
     expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("noc");
     expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
 
     // Item index 3 (third displayed): nighttime rainy
     expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("noc");
     expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
     expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("85%");
 
     // Item index 4 (fourth displayed): daytime rainy
     expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
     expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("dzień");
     expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
     expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    expect(cols[3].querySelector(".forecast-col__cloud-value").textContent).toBe("60%");
+
+    // Item index 5 (fifth displayed): nighttime partlycloudy
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("sobota");
+    expect(cols[4].querySelector(".forecast-col__period").textContent).toBe("noc");
+    expect(cols[4].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
+    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
+    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("30%");
 
     delete sensorsConfig.forecast;
   });
@@ -1019,8 +1030,8 @@ describe("forecast", () => {
     // Item index 2 (second displayed): partlycloudy, is_daytime=true
     expect(cols[1].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-day.svg");
 
-    // Item index 4 (fourth displayed)... wait that's rainy not partlycloudy
-    // Item index 5 would be partlycloudy night but it's not displayed (we show items 1-4)
+    // Item index 5 (fifth displayed): partlycloudy night
+    expect(cols[4].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-night.svg");
 
     delete sensorsConfig.forecast;
   });
@@ -1112,7 +1123,7 @@ describe("forecast", () => {
     delete sensorsConfig.forecast;
   });
 
-  it("icons thermometer and water_drop are present in forecast columns", () => {
+  it("icons thermometer, water_drop and cloud are present in forecast columns", () => {
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
@@ -1120,14 +1131,15 @@ describe("forecast", () => {
     const cols = card.querySelectorAll(".forecast-col");
     for (const col of cols) {
       const icons = col.querySelectorAll(".forecast-col__val-icon");
-      expect(icons).toHaveLength(2);
+      expect(icons).toHaveLength(3);
       expect(icons[0].textContent).toBe("thermometer");
       expect(icons[1].textContent).toBe("water_drop");
+      expect(icons[2].textContent).toBe("cloud");
     }
     delete sensorsConfig.forecast;
   });
 
-  it("forecast card has correct forecast-col__precip rounded without decimals", () => {
+  it("forecast card has correct forecast-col__precip and forecast-col__cloud rounded without decimals", () => {
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
@@ -1139,6 +1151,10 @@ describe("forecast", () => {
     expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
     // Item index 1: precipitation 0.1 → "0 mm"
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
+    // Item index 5: cloud_coverage 30 → "30%"
+    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("30%");
+    // Item index 1: cloud_coverage 90 → "90%"
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
 
     delete sensorsConfig.forecast;
   });

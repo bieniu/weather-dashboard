@@ -414,7 +414,8 @@ body {
   gap: 2px;
 }
 
-.forecast-col__precip {
+.forecast-col__precip,
+.forecast-col__cloud {
   font-size: 0.6875rem;
   color: var(--color-text-secondary);
   font-weight: 500;
@@ -431,7 +432,8 @@ body {
   font-size: 1rem;
 }
 
-.forecast-col__precip .forecast-col__val-icon {
+.forecast-col__precip .forecast-col__val-icon,
+.forecast-col__cloud .forecast-col__val-icon {
   font-size: 0.75rem;
 }
 

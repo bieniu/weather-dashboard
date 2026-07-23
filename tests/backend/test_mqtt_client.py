@@ -740,6 +740,7 @@ FORECAST_PAYLOAD = [
         "condition": "cloudy",
         "temperature": 23.1,
         "precipitation": 0.0,
+        "cloud_coverage": 75,
     },
     {
         "datetime": "2026-07-23T00:00:00+00:00",
@@ -747,6 +748,7 @@ FORECAST_PAYLOAD = [
         "condition": "rainy",
         "temperature": 20.5,
         "precipitation": 0.1,
+        "cloud_coverage": 90,
     },
     {
         "datetime": "2026-07-23T00:00:00+00:00",
@@ -754,6 +756,7 @@ FORECAST_PAYLOAD = [
         "condition": "partlycloudy",
         "temperature": 20.2,
         "precipitation": 1.6,
+        "cloud_coverage": 50,
     },
     {
         "datetime": "2026-07-24T00:00:00+00:00",
@@ -761,6 +764,7 @@ FORECAST_PAYLOAD = [
         "condition": "rainy",
         "temperature": 17.9,
         "precipitation": 0.6,
+        "cloud_coverage": 85,
     },
     {
         "datetime": "2026-07-24T00:00:00+00:00",
@@ -768,6 +772,7 @@ FORECAST_PAYLOAD = [
         "condition": "rainy",
         "temperature": 21.7,
         "precipitation": 2.0,
+        "cloud_coverage": 60,
     },
     {
         "datetime": "2026-07-25T00:00:00+00:00",
@@ -775,6 +780,7 @@ FORECAST_PAYLOAD = [
         "condition": "partlycloudy",
         "temperature": 20.3,
         "precipitation": 0.0,
+        "cloud_coverage": 30,
     },
 ]
 
