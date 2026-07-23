@@ -415,7 +415,8 @@ body {
 }
 
 .forecast-col__precip,
-.forecast-col__cloud {
+.forecast-col__cloud,
+.forecast-col__wind {
   font-size: 0.6875rem;
   color: var(--color-text-secondary);
   font-weight: 500;
@@ -433,7 +434,8 @@ body {
 }
 
 .forecast-col__precip .forecast-col__val-icon,
-.forecast-col__cloud .forecast-col__val-icon {
+.forecast-col__cloud .forecast-col__val-icon,
+.forecast-col__wind .forecast-col__val-icon {
   font-size: 0.75rem;
 }
 
