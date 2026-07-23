@@ -301,6 +301,13 @@ function createCard(sensorKey, sensor, index) {
           <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
           <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
         </div>
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+        </div>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
     `;
@@ -430,7 +437,7 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   if (sensor.type === "forecast") {
     const container = document.getElementById(`${parameter}-forecast`);
     if (!container || !Array.isArray(value)) return;
-    const items = value.slice(1, 5); // skip first (current), take next 4
+    const items = value.slice(1, 6); // skip first (current), take next 5
     const cols = container.children;
     for (let i = 0; i < Math.min(items.length, cols.length); i++) {
       const item = items[i];
