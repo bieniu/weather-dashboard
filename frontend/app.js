@@ -68,7 +68,7 @@ function getConditionSvgPath(iconField, timestamp, isDaytime) {
 }
 
 function getPolishDayAbbr(date) {
-  const days = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
+  const days = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
   return days[date.getDay()];
 }
 
