@@ -332,7 +332,8 @@ body {
   gap: 0;
 }
 
-#card-alerts {
+#card-alerts,
+#card-forecast {
   grid-column: 1 / -1;
 }
 
