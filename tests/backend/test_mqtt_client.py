@@ -731,3 +731,164 @@ async def test_process_sun_missing_value(monkeypatch, caplog) -> None:
 
     assert "Payload parse error" in caplog.text
     assert sun_state["value"] is None
+
+
+FORECAST_PAYLOAD = [
+    {
+        "datetime": "2026-07-22T00:00:00+00:00",
+        "is_daytime": True,
+        "condition": "cloudy",
+        "temperature": 23.1,
+        "precipitation": 0.0,
+        "cloud_coverage": 75,
+    },
+    {
+        "datetime": "2026-07-23T00:00:00+00:00",
+        "is_daytime": False,
+        "condition": "rainy",
+        "temperature": 20.5,
+        "precipitation": 0.1,
+        "cloud_coverage": 90,
+    },
+    {
+        "datetime": "2026-07-23T00:00:00+00:00",
+        "is_daytime": True,
+        "condition": "partlycloudy",
+        "temperature": 20.2,
+        "precipitation": 1.6,
+        "cloud_coverage": 50,
+    },
+    {
+        "datetime": "2026-07-24T00:00:00+00:00",
+        "is_daytime": False,
+        "condition": "rainy",
+        "temperature": 17.9,
+        "precipitation": 0.6,
+        "cloud_coverage": 85,
+    },
+    {
+        "datetime": "2026-07-24T00:00:00+00:00",
+        "is_daytime": True,
+        "condition": "rainy",
+        "temperature": 21.7,
+        "precipitation": 2.0,
+        "cloud_coverage": 60,
+    },
+    {
+        "datetime": "2026-07-25T00:00:00+00:00",
+        "is_daytime": False,
+        "condition": "partlycloudy",
+        "temperature": 20.3,
+        "precipitation": 0.0,
+        "cloud_coverage": 30,
+    },
+]
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_forecast_message_persisted(monkeypatch, db_engine) -> None:
+    """A forecast MQTT message is persisted with value_str containing the JSON array."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/forecast")
+    message.payload = json.dumps(FORECAST_PAYLOAD).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    await _process_mqtt_message(message)
+
+    async with db_engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT parameter, value_str FROM weather_readings")
+        )
+        row = result.fetchone()
+    assert row is not None
+    assert row[0] == "forecast"
+    assert json.loads(row[1]) == FORECAST_PAYLOAD
+
+
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_process_forecast_message_broadcasts(monkeypatch, db_engine) -> None:
+    """A forecast MQTT message broadcasts the forecast array via WebSocketManager."""
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    test_session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", test_session_factory)
+
+    from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
+
+    ws = AsyncMock()
+
+    import app.mqtt_client as mqtt_mod  # ty: ignore[unresolved-import]
+
+    original_manager = mqtt_mod.manager
+    test_manager = WebSocketManager()
+    await test_manager.connect(ws)
+    monkeypatch.setattr(mqtt_mod, "manager", test_manager)
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/forecast")
+    message.payload = json.dumps(FORECAST_PAYLOAD).encode()
+
+    await mqtt_mod._process_mqtt_message(message)
+
+    expected = json.dumps(
+        {
+            "parameter": "forecast",
+            "value": FORECAST_PAYLOAD,
+            "timestamp": "2026-06-23T12:00:00+00:00",
+        }
+    )
+    ws.send_text.assert_awaited_once_with(expected)
+
+    monkeypatch.setattr(mqtt_mod, "manager", original_manager)
+
+
+async def test_process_forecast_invalid_payload_not_a_list(monkeypatch, caplog) -> None:
+    """A forecast payload that is not a list is rejected."""
+    import logging
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/forecast")
+    message.payload = json.dumps({"value": "not-a-list"}).encode()
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    with caplog.at_level(logging.WARNING):
+        await _process_mqtt_message(message)
+
+    assert (
+        "Forecast payload on topic weather-dashboard/forecast is not a list"
+        in caplog.text
+    )
+
+
+async def test_process_forecast_invalid_json(monkeypatch, caplog) -> None:
+    """A forecast payload with invalid JSON is rejected."""
+    import logging
+
+    message = MagicMock()
+    message.topic = MagicMock()
+    message.topic.__str__ = MagicMock(return_value="weather-dashboard/forecast")
+    message.payload = b"not-json"
+
+    from app.mqtt_client import _process_mqtt_message  # ty: ignore[unresolved-import]
+
+    with caplog.at_level(logging.WARNING):
+        await _process_mqtt_message(message)
+
+    assert "Payload parse error" in caplog.text

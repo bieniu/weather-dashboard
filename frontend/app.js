@@ -41,11 +41,16 @@ const SVG_FILE = {
   "windy-variant": "windy-variant.svg",
 };
 
-function getConditionSvgPath(iconField, timestamp) {
+function getConditionSvgPath(iconField, timestamp, isDaytime) {
   const raw = iconField.startsWith("mdi:") ? iconField.slice(4) : iconField;
   const key = MDI_TO_KEY[raw] || raw;
 
   if (key === "partlycloudy") {
+    if (isDaytime !== undefined) {
+      return isDaytime
+        ? "weather_icons/partly-cloudy-day.svg"
+        : "weather_icons/partly-cloudy-night.svg";
+    }
     if (sunState.value === "above_horizon") {
       return "weather_icons/partly-cloudy-day.svg";
     }
@@ -60,6 +65,11 @@ function getConditionSvgPath(iconField, timestamp) {
   }
   const file = SVG_FILE[key];
   return file ? `weather_icons/${file}` : null;
+}
+
+function getPolishDayAbbr(date) {
+  const days = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+  return days[date.getDay()];
 }
 
 const ALERT_ICONS = {
@@ -181,6 +191,24 @@ async function loadSunState() {
   }
 }
 
+async function loadForecast() {
+  try {
+    const res = await fetch(`${API_BASE}/forecast`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const forecastData = data.forecast;
+    const timestamp = data.timestamp;
+    if (Array.isArray(forecastData) && forecastData.length > 0) {
+      const forecastKey = Object.entries(sensorsConfig).find(([, s]) => s.type === "forecast")?.[0];
+      if (forecastKey) {
+        updateCard(forecastKey, forecastData, null, timestamp ?? new Date().toISOString());
+      }
+    }
+  } catch (err) {
+    console.error("[Forecast] Error loading forecast:", err);
+  }
+}
+
 async function loadAlerts() {
   try {
     const res = await fetch(`${API_BASE}/alerts`);
@@ -240,6 +268,60 @@ function createCard(sensorKey, sensor, index) {
         <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
       </div>
       <p class="weather-card__updated" id="${sensorKey}-updated"></p>
+    `;
+  } else if (sensor.type === "forecast") {
+    card.innerHTML = `
+      <div class="weather-card__header">
+        <span class="weather-card__label">${sensor.name}</span>
+      </div>
+      <div class="forecast-grid" id="${sensorKey}-forecast">
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
+        </div>
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
+        </div>
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
+        </div>
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
+        </div>
+        <div class="forecast-col">
+          <div class="forecast-col__day">--</div>
+          <div class="forecast-col__period">--</div>
+          <img class="forecast-col__icon" src="" alt="">
+          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
+          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
+          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
+          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
+        </div>
+      </div>
+      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
     `;
   } else if (sensor.type === "condition" || sensor.type === "text") {
     const iconFile = sensorKey.replace(/_/g, "-");
@@ -364,7 +446,42 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   const updatedEl = document.getElementById(`${parameter}-updated`);
   if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
 
-  if (sensor.type === "condition" || sensor.type === "text") {
+  if (sensor.type === "forecast") {
+    const container = document.getElementById(`${parameter}-forecast`);
+    if (!container || !Array.isArray(value)) return;
+    const items = value.slice(0, 5); // take first 5 forecast periods
+    const cols = container.children;
+    for (let i = 0; i < Math.min(items.length, cols.length); i++) {
+      const item = items[i];
+      const col = cols[i];
+      const dt = new Date(item.datetime);
+      col.querySelector(".forecast-col__day").textContent = getPolishDayAbbr(dt);
+      col.querySelector(".forecast-col__period").textContent = item.is_daytime ? "dzień" : "noc";
+      const img = col.querySelector(".forecast-col__icon");
+      img.src = getConditionSvgPath(item.condition, item.datetime, item.is_daytime);
+      img.alt = item.condition;
+      col.querySelector(".forecast-col__temp-value").textContent =
+        item.temperature != null ? `${Math.round(item.temperature)}°C` : "--";
+      col.querySelector(".forecast-col__precip-value").textContent =
+        item.precipitation != null ? `${Math.round(item.precipitation)} mm` : "--";
+      col.querySelector(".forecast-col__cloud-value").textContent =
+        item.cloud_coverage != null ? `${Math.round(item.cloud_coverage)}%` : "--";
+      col.querySelector(".forecast-col__wind-value").textContent =
+        item.wind_speed != null ? `${Math.round(item.wind_speed)} km/h` : "--";
+    }
+    // Reset remaining columns to placeholder state
+    for (let i = items.length; i < cols.length; i++) {
+      const col = cols[i];
+      col.querySelector(".forecast-col__day").textContent = "--";
+      col.querySelector(".forecast-col__period").textContent = "--";
+      col.querySelector(".forecast-col__icon").src = "";
+      col.querySelector(".forecast-col__icon").alt = "";
+      col.querySelector(".forecast-col__temp-value").textContent = "--";
+      col.querySelector(".forecast-col__precip-value").textContent = "--";
+      col.querySelector(".forecast-col__cloud-value").textContent = "--";
+      col.querySelector(".forecast-col__wind-value").textContent = "--";
+    }
+  } else if (sensor.type === "condition" || sensor.type === "text") {
     if (valueEl) valueEl.textContent = value ?? "—";
   } else {
     if (valueEl) valueEl.textContent = Number(value).toFixed(sensor.round ?? 1);
@@ -404,7 +521,7 @@ function appendChartPoint(parameter, value, timestamp) {
 async function loadHistory(parameter) {
   try {
     const sensor = sensorsConfig[parameter];
-    if (sensor?.type === "alerts") return;
+    if (sensor?.type === "alerts" || sensor?.type === "forecast") return;
 
     const hours = sensor?.history_hours ?? HISTORY_HOURS;
     const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
@@ -533,7 +650,12 @@ async function init() {
   let idx = 0;
   for (const [key, sensor] of Object.entries(sensorsConfig)) {
     grid.appendChild(createCard(key, sensor, idx));
-    if (sensor.type !== "condition" && sensor.type !== "text" && sensor.type !== "alerts") {
+    if (
+      sensor.type !== "condition" &&
+      sensor.type !== "text" &&
+      sensor.type !== "alerts" &&
+      sensor.type !== "forecast"
+    ) {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
     }
     idx++;
@@ -541,6 +663,7 @@ async function init() {
 
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
+  loadForecast();
   loadAlerts();
   loadSunState();
   scheduleAlertCheck();
@@ -554,6 +677,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 export {
   getConditionSvgPath,
+  getPolishDayAbbr,
   rerenderConditionIcons,
   formatTimestamp,
   formatUpdated,
@@ -565,6 +689,7 @@ export {
   updateCard,
   appendChartPoint,
   loadHistory,
+  loadForecast,
   connectWebSocket,
   initThemeToggle,
   loadSensors,

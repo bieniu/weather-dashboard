@@ -10,6 +10,9 @@ sensors:
   alerts:
     type: alerts
     name: Alerty meteorologiczne
+  forecast:
+    type: forecast
+    name: Prognoza
   temperature:
     name: Temperatura
     icon: mdi:thermometer

@@ -3,6 +3,7 @@ process.env.TZ = "UTC";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   getConditionSvgPath,
+  getPolishDayAbbr,
   formatTimestamp,
   formatUpdated,
   resolveIcon,
@@ -12,6 +13,7 @@ import {
   updateCard,
   appendChartPoint,
   loadHistory,
+  loadForecast,
   connectWebSocket,
   initThemeToggle,
   loadSensors,
@@ -405,6 +407,14 @@ describe("connectWebSocket", () => {
     connectWebSocket();
     wsMock.onerror(new Event("error"));
     expect(wsMock.close).toHaveBeenCalledOnce();
+  });
+
+  it("logs warning on parse error", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    connectWebSocket();
+    wsMock.onmessage({ data: "not-json" });
+    expect(console.warn).toHaveBeenCalledWith("[WS] Message parse error:", expect.any(Error));
+    vi.restoreAllMocks();
   });
 });
 
@@ -918,5 +928,340 @@ describe("init", () => {
 
     await init();
     expect(charts.temperature).toBeTruthy();
+  });
+});
+
+describe("forecast", () => {
+  const SENSOR_FORECAST = {
+    forecast: { name: "Prognoza", type: "forecast", icon: "", color: null, round: 1, unit: "" },
+  };
+
+  const FORECAST_DATA = [
+    { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: 23.1, precipitation: 0.0, cloud_coverage: 75, wind_speed: 15.0 },
+    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 20.5, precipitation: 0.1, cloud_coverage: 90, wind_speed: 27.36 },
+    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: true, condition: "partlycloudy", temperature: 20.2, precipitation: 1.6, cloud_coverage: 50, wind_speed: 17.28 },
+    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 17.9, precipitation: 0.6, cloud_coverage: 85, wind_speed: 24.84 },
+    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: true, condition: "rainy", temperature: 21.7, precipitation: 2.0, cloud_coverage: 60, wind_speed: 18.5 },
+    { datetime: "2026-07-25T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 20.3, precipitation: 0.0, cloud_coverage: 30, wind_speed: 16.2 },
+  ];
+
+  it("getPolishDayAbbr returns correct Polish abbreviations", () => {
+    expect(getPolishDayAbbr(new Date("2026-07-20"))).toBe("poniedziałek");
+    expect(getPolishDayAbbr(new Date("2026-07-21"))).toBe("wtorek");
+    expect(getPolishDayAbbr(new Date("2026-07-22"))).toBe("środa");
+    expect(getPolishDayAbbr(new Date("2026-07-23"))).toBe("czwartek");
+    expect(getPolishDayAbbr(new Date("2026-07-24"))).toBe("piątek");
+    expect(getPolishDayAbbr(new Date("2026-07-25"))).toBe("sobota");
+    expect(getPolishDayAbbr(new Date("2026-07-26"))).toBe("niedziela");
+  });
+
+  it("getConditionSvgPath uses isDaytime parameter for partlycloudy", () => {
+    expect(getConditionSvgPath("partlycloudy", null, true)).toBe("weather_icons/partly-cloudy-day.svg");
+    expect(getConditionSvgPath("partlycloudy", null, false)).toBe("weather_icons/partly-cloudy-night.svg");
+  });
+
+  it("getConditionSvgPath ignores isDaytime for non-partlycloudy", () => {
+    expect(getConditionSvgPath("cloudy", null, true)).toBe("weather_icons/cloudy.svg");
+    expect(getConditionSvgPath("cloudy", null, false)).toBe("weather_icons/cloudy.svg");
+  });
+
+  it("createCard creates forecast card with 5 columns and no header icon", () => {
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    expect(card.id).toBe("card-forecast");
+    expect(card.querySelector(".weather-card__header .material-symbols-rounded")).toBeNull();
+    expect(card.querySelector(".weather-card__label")).toBeTruthy();
+    expect(card.querySelectorAll(".forecast-col")).toHaveLength(5);
+    expect(card.querySelector(".forecast-grid")).toBeTruthy();
+  });
+
+  it("createCard forecast card has correct column elements", () => {
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    const col = card.querySelector(".forecast-col");
+    expect(col.querySelector(".forecast-col__day")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__period")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__icon")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__temp-value")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__precip-value")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__cloud-value")).toBeTruthy();
+    expect(col.querySelector(".forecast-col__wind-value")).toBeTruthy();
+    expect(col.querySelectorAll(".material-symbols-rounded")).toHaveLength(4);
+  });
+
+  it("updateCard populates forecast columns with data items 0-4", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
+
+    const cols = card.querySelectorAll(".forecast-col");
+
+    // Item 0: daytime cloudy
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("23°C");
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("75%");
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
+
+    // Item 2: daytime partlycloudy
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
+    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("50%");
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
+
+    // Item 3: nighttime partlycloudy
+    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
+    expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("noc");
+    expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
+    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
+    expect(cols[3].querySelector(".forecast-col__cloud-value").textContent).toBe("85%");
+    expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
+
+    // Item 4: daytime rainy
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("piątek");
+    expect(cols[4].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[4].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
+    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("60%");
+    expect(cols[4].querySelector(".forecast-col__wind-value").textContent).toBe("19 km/h");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("updateCard shows partlycloudy day/night icons based on is_daytime", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
+
+    const cols = card.querySelectorAll(".forecast-col");
+
+    // Item 2: partlycloudy, is_daytime=true
+    expect(cols[2].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-day.svg");
+
+    // Item 3: partlycloudy, is_daytime=false
+    expect(cols[3].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-night.svg");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("updateCard does nothing for non-array value", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    updateCard("forecast", "not-an-array", null, "2026-07-22T12:00:00Z");
+
+    // Columns should still show placeholder values
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("--");
+    expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("--");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("loadForecast fetches from API and updates card", async () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ forecast: FORECAST_DATA, timestamp: "2026-07-22T12:00:00Z" }),
+    });
+
+    await loadForecast();
+
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("loadForecast handles empty response gracefully", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ forecast: [], timestamp: null }),
+    });
+
+    await loadForecast();
+    // Should not throw
+    vi.restoreAllMocks();
+  });
+
+  it("loadForecast handles HTTP error gracefully", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+
+    await loadForecast();
+    expect(console.error).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("updateCard resets remaining columns when fewer than 5 forecast items arrive", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    // First populate all 5 columns
+    updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[4].querySelector(".forecast-col__day").textContent).not.toBe("--");
+
+    // Now update with only 2 items — remaining columns should reset
+    const partialData = FORECAST_DATA.slice(0, 2);
+    updateCard("forecast", partialData, null, "2026-07-22T13:00:00Z");
+
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    // Columns 2-4 should be reset to placeholder
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__icon").src).toBe("");
+    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("--");
+    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("--");
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("--");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("updateCard shows -- for null forecast values instead of NaN", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const dataWithNulls = [
+      { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: null, precipitation: null, cloud_coverage: null, wind_speed: null },
+    ];
+    updateCard("forecast", dataWithNulls, null, "2026-07-22T12:00:00Z");
+
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("--");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("loadForecast uses server timestamp when available", async () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ forecast: FORECAST_DATA.slice(0, 1), timestamp: "2026-07-22T14:00:00Z" }),
+    });
+
+    await loadForecast();
+
+    const updated = document.getElementById("forecast-updated");
+    expect(updated.textContent).toContain("14:00:00");
+
+    delete sensorsConfig.forecast;
+  });
+  it("loadHistory updates condition sensor from history data", async () => {
+    sensorsConfig.condition = SENSOR_CONDITION.condition;
+    const card = createCard("condition", SENSOR_CONDITION.condition, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const history = [
+      { timestamp: "2025-06-24T13:00:00Z", value_str: "Pochmurnie", icon: "mdi:weather-cloudy" },
+      { timestamp: "2025-06-24T14:00:00Z", value_str: "Słonecznie", icon: "mdi:weather-sunny" },
+    ];
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(history),
+    });
+
+    await loadHistory("condition");
+    expect(document.getElementById("condition-value").textContent).toBe("Słonecznie");
+    expect(document.getElementById("condition-icon-img").src).toContain("sunny.svg");
+    delete sensorsConfig.condition;
+  });
+
+  it("loadHistory skips forecast sensor", async () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    // Should not throw even without fetch mock
+    await loadHistory("forecast");
+    delete sensorsConfig.forecast;
+  });
+
+  it("WS forecast message updates the card", () => {
+    globalThis.location = { host: "localhost:8332", protocol: "http:" };
+    const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
+    globalThis.WebSocket = vi.fn(function () { return wsMock; });
+
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    connectWebSocket();
+    wsMock.onmessage({
+      data: JSON.stringify({
+        parameter: "forecast",
+        value: FORECAST_DATA,
+        timestamp: "2026-07-22T12:00:00Z",
+      }),
+    });
+
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
+    delete globalThis.WebSocket;
+    delete sensorsConfig.forecast;
+  });
+
+  it("icons thermometer, water_drop, cloud and air are present in forecast columns", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const cols = card.querySelectorAll(".forecast-col");
+    for (const col of cols) {
+      const icons = col.querySelectorAll(".forecast-col__val-icon");
+      expect(icons).toHaveLength(4);
+      expect(icons[0].textContent).toBe("thermometer");
+      expect(icons[1].textContent).toBe("air");
+      expect(icons[2].textContent).toBe("water_drop");
+      expect(icons[3].textContent).toBe("cloud");
+    }
+    delete sensorsConfig.forecast;
+  });
+
+  it("forecast card has precip, cloud and wind values rounded without decimals", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
+
+    const cols = card.querySelectorAll(".forecast-col");
+    // Item 4: precipitation 2.0 → "2 mm"
+    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    // Item 0: precipitation 0.0 → "0 mm"
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
+    // Item 1: cloud_coverage 90 → "90%"
+    expect(cols[1].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
+    // Item 2: cloud_coverage 50 → "50%"
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("50%");
+    // Item 2: wind_speed 17.28 → "17 km/h" (rounds down)
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
+    // Item 3: wind_speed 24.84 → "25 km/h" (rounds up)
+    expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
+    // Item 0: wind_speed 15.0 → "15 km/h" (no rounding needed)
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
+
+    delete sensorsConfig.forecast;
   });
 });

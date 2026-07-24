@@ -1,5 +1,6 @@
 """REST + WebSocket router for weather data."""
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
@@ -111,6 +112,35 @@ async def get_sun(
         "value": row.value_str,
         "timestamp": ts.isoformat(),
     }
+
+
+@router.get("/forecast")
+async def get_forecast(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Return the latest forecast data as parsed JSON with server timestamp."""
+    forecast_key = next(
+        (k for k, s in settings.sensors.items() if s.type == "forecast"), None
+    )
+    if forecast_key is None:
+        return {"forecast": [], "timestamp": None}
+
+    stmt = (
+        select(WeatherReading)
+        .where(WeatherReading.parameter == forecast_key)
+        .order_by(desc(WeatherReading.timestamp))
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        return {"forecast": [], "timestamp": None}
+    raw = row.value_str
+    if raw is None:
+        return {"forecast": [], "timestamp": None}
+    ts = row.timestamp
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return {"forecast": json.loads(str(raw)), "timestamp": ts.isoformat()}
 
 
 @router.get("/analytics")
