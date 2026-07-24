@@ -932,7 +932,7 @@ describe("forecast", () => {
     { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: 23.1, precipitation: 0.0, cloud_coverage: 75, wind_speed: 15.0 },
     { datetime: "2026-07-23T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 20.5, precipitation: 0.1, cloud_coverage: 90, wind_speed: 27.36 },
     { datetime: "2026-07-23T00:00:00+00:00", is_daytime: true, condition: "partlycloudy", temperature: 20.2, precipitation: 1.6, cloud_coverage: 50, wind_speed: 17.28 },
-    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 17.9, precipitation: 0.6, cloud_coverage: 85, wind_speed: 24.84 },
+    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 17.9, precipitation: 0.6, cloud_coverage: 85, wind_speed: 24.84 },
     { datetime: "2026-07-24T00:00:00+00:00", is_daytime: true, condition: "rainy", temperature: 21.7, precipitation: 2.0, cloud_coverage: 60, wind_speed: 18.5 },
     { datetime: "2026-07-25T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 20.3, precipitation: 0.0, cloud_coverage: 30, wind_speed: 16.2 },
   ];
@@ -979,7 +979,7 @@ describe("forecast", () => {
     expect(col.querySelectorAll(".material-symbols-rounded")).toHaveLength(4);
   });
 
-  it("updateCard populates forecast columns with data items 1-5", () => {
+  it("updateCard populates forecast columns with data items 0-4", () => {
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
@@ -988,37 +988,37 @@ describe("forecast", () => {
 
     const cols = card.querySelectorAll(".forecast-col");
 
-    // Item index 1 (first displayed): nighttime rainy
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
-    expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("noc");
-    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
+    // Item 0: daytime cloudy
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("23°C");
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
-    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
-    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("27 km/h");
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("75%");
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
 
-    // Item index 3 (third displayed): nighttime rainy
-    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("piątek");
-    expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("noc");
-    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
-    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
-    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("85%");
-    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
+    // Item 2: daytime partlycloudy
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
+    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("50%");
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
 
-    // Item index 4 (fourth displayed): daytime rainy
+    // Item 3: nighttime partlycloudy
     expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
-    expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("dzień");
-    expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
-    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
-    expect(cols[3].querySelector(".forecast-col__cloud-value").textContent).toBe("60%");
-    expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("19 km/h");
+    expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("noc");
+    expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
+    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
+    expect(cols[3].querySelector(".forecast-col__cloud-value").textContent).toBe("85%");
+    expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
 
-    // Item index 5 (fifth displayed): nighttime partlycloudy
-    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("sobota");
-    expect(cols[4].querySelector(".forecast-col__period").textContent).toBe("noc");
-    expect(cols[4].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
-    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
-    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("30%");
-    expect(cols[4].querySelector(".forecast-col__wind-value").textContent).toBe("16 km/h");
+    // Item 4: daytime rainy
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("piątek");
+    expect(cols[4].querySelector(".forecast-col__period").textContent).toBe("dzień");
+    expect(cols[4].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
+    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("60%");
+    expect(cols[4].querySelector(".forecast-col__wind-value").textContent).toBe("19 km/h");
 
     delete sensorsConfig.forecast;
   });
@@ -1032,11 +1032,11 @@ describe("forecast", () => {
 
     const cols = card.querySelectorAll(".forecast-col");
 
-    // Item index 2 (second displayed): partlycloudy, is_daytime=true
-    expect(cols[1].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-day.svg");
+    // Item 2: partlycloudy, is_daytime=true
+    expect(cols[2].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-day.svg");
 
-    // Item index 5 (fifth displayed): partlycloudy night
-    expect(cols[4].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-night.svg");
+    // Item 3: partlycloudy, is_daytime=false
+    expect(cols[3].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-night.svg");
 
     delete sensorsConfig.forecast;
   });
@@ -1069,7 +1069,7 @@ describe("forecast", () => {
     await loadForecast();
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
     expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
 
     delete sensorsConfig.forecast;
@@ -1122,8 +1122,8 @@ describe("forecast", () => {
     });
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("czwartek");
-    expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
     delete globalThis.WebSocket;
     delete sensorsConfig.forecast;
   });
@@ -1153,20 +1153,20 @@ describe("forecast", () => {
     updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
 
     const cols = card.querySelectorAll(".forecast-col");
-    // Item index 4: precipitation 2.0 → "2 mm"
-    expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
-    // Item index 1: precipitation 0.1 → "0 mm"
+    // Item 4: precipitation 2.0 → "2 mm"
+    expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
+    // Item 0: precipitation 0.0 → "0 mm"
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
-    // Item index 5: cloud_coverage 30 → "30%"
-    expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("30%");
-    // Item index 1: cloud_coverage 90 → "90%"
-    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
-    // Item index 2: wind_speed 17.28 → "17 km/h"
-    expect(cols[1].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
-    // Item index 0: wind_speed 15.0 → "15 km/h"
-    // (item 0 is skipped, item 1 → index 0 displayed, but wind_speed: 27.36 → "27 km/h")
-    // Let's verify the first displayed column: item index 1 = 27.36 → "27 km/h"
-    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("27 km/h");
+    // Item 1: cloud_coverage 90 → "90%"
+    expect(cols[1].querySelector(".forecast-col__cloud-value").textContent).toBe("90%");
+    // Item 2: cloud_coverage 50 → "50%"
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("50%");
+    // Item 2: wind_speed 17.28 → "17 km/h" (rounds down)
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
+    // Item 3: wind_speed 24.84 → "25 km/h" (rounds up)
+    expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
+    // Item 0: wind_speed 15.0 → "15 km/h" (no rounding needed)
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
 
     delete sensorsConfig.forecast;
   });

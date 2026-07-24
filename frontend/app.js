@@ -447,7 +447,7 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   if (sensor.type === "forecast") {
     const container = document.getElementById(`${parameter}-forecast`);
     if (!container || !Array.isArray(value)) return;
-    const items = value.slice(1, 6); // skip first (current), take next 5
+    const items = value.slice(0, 5); // take first 5 forecast periods
     const cols = container.children;
     for (let i = 0; i < Math.min(items.length, cols.length); i++) {
       const item = items[i];
