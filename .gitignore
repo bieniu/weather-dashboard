@@ -214,4 +214,4 @@ weather.db
 backend/weather.db
 
 # oh-my-opencode-slim
-codemap.*
+codemap.json

@@ -109,3 +109,14 @@ Failing any of these must be fixed before the implementation is complete.
 - Tests use lazy imports inside each function (pytest fixtures trigger app module loading).
 - `conftest.py` sets required env vars (`MQTT_BROKER`, `MQTT_USER`, `MQTT_PASSWORD`, `DATABASE_URL`) and `chdir`s to `backend/` before any app module is imported.
 - Ruff and ty both run on test files; per-file-ignores in `pyproject.toml` suppress rules inappropriate for tests (ANN, D, S101, PLC0415, etc.).
+
+## Repository Map
+
+A full codemap is available at `codemap.md` in the project root.
+
+Before working on any task, read `codemap.md` to understand:
+- Project architecture and entry points
+- Directory responsibilities and design patterns
+- Data flow and integration points between modules
+
+For deep work on a specific folder, also read that folder's `codemap.md`.
