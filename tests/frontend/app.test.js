@@ -2,6 +2,7 @@ process.env.TZ = "UTC";
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  updateForecastLayout,
   getConditionSvgPath,
   getPolishDayAbbr,
   formatTimestamp,
@@ -1263,5 +1264,54 @@ describe("forecast", () => {
     expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
 
     delete sensorsConfig.forecast;
+  });
+
+  it("updateForecastLayout adds compact class when grid has 1 column", () => {
+    const grid = document.getElementById("weather-grid");
+    const forecastGrid = document.createElement("div");
+    forecastGrid.className = "forecast-grid";
+    grid.appendChild(forecastGrid);
+
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      gridTemplateColumns: "1fr",
+    });
+
+    updateForecastLayout();
+
+    expect(forecastGrid.classList.contains("forecast-grid--compact")).toBe(true);
+    vi.restoreAllMocks();
+  });
+
+  it("updateForecastLayout removes compact class when grid has multiple columns", () => {
+    const grid = document.getElementById("weather-grid");
+    const forecastGrid = document.createElement("div");
+    forecastGrid.className = "forecast-grid";
+    forecastGrid.classList.add("forecast-grid--compact");
+    grid.appendChild(forecastGrid);
+
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
+    });
+
+    updateForecastLayout();
+
+    expect(forecastGrid.classList.contains("forecast-grid--compact")).toBe(false);
+    vi.restoreAllMocks();
+  });
+
+  it("updateForecastLayout does nothing when forecast grid is missing", () => {
+    // No forecast-grid in the DOM — should not throw
+    expect(() => updateForecastLayout()).not.toThrow();
+  });
+
+  it("updateForecastLayout does nothing when weather grid is missing", () => {
+    const grid = document.getElementById("weather-grid");
+    grid.remove();
+
+    const forecastGrid = document.createElement("div");
+    forecastGrid.className = "forecast-grid";
+    document.body.appendChild(forecastGrid);
+
+    expect(() => updateForecastLayout()).not.toThrow();
   });
 });

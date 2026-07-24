@@ -642,6 +642,15 @@ async function initAnalytics() {
   }
 }
 
+function updateForecastLayout() {
+  const grid = document.getElementById("weather-grid");
+  const forecastGrid = document.querySelector(".forecast-grid");
+  if (!grid || !forecastGrid) return;
+  const tracks = getComputedStyle(grid).gridTemplateColumns;
+  const colCount = tracks.split(" ").length;
+  forecastGrid.classList.toggle("forecast-grid--compact", colCount === 1);
+}
+
 async function init() {
   initThemeToggle();
   sensorsConfig = await loadSensors();
@@ -661,6 +670,9 @@ async function init() {
     idx++;
   }
 
+  updateForecastLayout();
+  window.addEventListener("resize", updateForecastLayout);
+
   await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
 
   loadForecast();
@@ -676,6 +688,7 @@ async function init() {
 document.addEventListener("DOMContentLoaded", init);
 
 export {
+  updateForecastLayout,
   getConditionSvgPath,
   getPolishDayAbbr,
   rerenderConditionIcons,

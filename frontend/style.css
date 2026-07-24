@@ -440,6 +440,13 @@ body {
   font-size: 0.75rem;
 }
 
+.forecast-grid--compact {
+  grid-template-columns: repeat(4, 1fr);
+}
+.forecast-grid--compact .forecast-col:nth-child(5) {
+  display: none;
+}
+
 #card-forecast .weather-card__updated {
   margin-top: 4px;
 }
