@@ -117,13 +117,13 @@ async def get_sun(
 @router.get("/forecast")
 async def get_forecast(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[dict]:
-    """Return the latest forecast data as parsed JSON."""
+) -> dict:
+    """Return the latest forecast data as parsed JSON with server timestamp."""
     forecast_key = next(
         (k for k, s in settings.sensors.items() if s.type == "forecast"), None
     )
     if forecast_key is None:
-        return []
+        return {"forecast": [], "timestamp": None}
 
     stmt = (
         select(WeatherReading)
@@ -133,11 +133,14 @@ async def get_forecast(
     )
     row = (await db.execute(stmt)).scalar_one_or_none()
     if row is None:
-        return []
+        return {"forecast": [], "timestamp": None}
     raw = row.value_str
     if raw is None:
-        return []
-    return json.loads(str(raw))
+        return {"forecast": [], "timestamp": None}
+    ts = row.timestamp
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return {"forecast": json.loads(str(raw)), "timestamp": ts.isoformat()}
 
 
 @router.get("/analytics")

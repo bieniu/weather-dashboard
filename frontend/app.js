@@ -196,10 +196,12 @@ async function loadForecast() {
     const res = await fetch(`${API_BASE}/forecast`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (Array.isArray(data) && data.length > 0) {
+    const forecastData = data.forecast;
+    const timestamp = data.timestamp;
+    if (Array.isArray(forecastData) && forecastData.length > 0) {
       const forecastKey = Object.entries(sensorsConfig).find(([, s]) => s.type === "forecast")?.[0];
       if (forecastKey) {
-        updateCard(forecastKey, data, null, new Date().toISOString());
+        updateCard(forecastKey, forecastData, null, timestamp ?? new Date().toISOString());
       }
     }
   } catch (err) {
@@ -459,13 +461,25 @@ function updateCard(parameter, value, unit, timestamp, icon) {
       img.src = getConditionSvgPath(item.condition, item.datetime, item.is_daytime);
       img.alt = item.condition;
       col.querySelector(".forecast-col__temp-value").textContent =
-        `${Math.round(item.temperature)}°C`;
+        item.temperature != null ? `${Math.round(item.temperature)}°C` : "--";
       col.querySelector(".forecast-col__precip-value").textContent =
-        `${Math.round(item.precipitation)} mm`;
+        item.precipitation != null ? `${Math.round(item.precipitation)} mm` : "--";
       col.querySelector(".forecast-col__cloud-value").textContent =
-        `${Math.round(item.cloud_coverage)}%`;
+        item.cloud_coverage != null ? `${Math.round(item.cloud_coverage)}%` : "--";
       col.querySelector(".forecast-col__wind-value").textContent =
-        `${Math.round(item.wind_speed)} km/h`;
+        item.wind_speed != null ? `${Math.round(item.wind_speed)} km/h` : "--";
+    }
+    // Reset remaining columns to placeholder state
+    for (let i = items.length; i < cols.length; i++) {
+      const col = cols[i];
+      col.querySelector(".forecast-col__day").textContent = "--";
+      col.querySelector(".forecast-col__period").textContent = "--";
+      col.querySelector(".forecast-col__icon").src = "";
+      col.querySelector(".forecast-col__icon").alt = "";
+      col.querySelector(".forecast-col__temp-value").textContent = "--";
+      col.querySelector(".forecast-col__precip-value").textContent = "--";
+      col.querySelector(".forecast-col__cloud-value").textContent = "--";
+      col.querySelector(".forecast-col__wind-value").textContent = "--";
     }
   } else if (sensor.type === "condition" || sensor.type === "text") {
     if (valueEl) valueEl.textContent = value ?? "—";
