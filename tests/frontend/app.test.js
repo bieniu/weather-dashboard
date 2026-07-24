@@ -1063,7 +1063,7 @@ describe("forecast", () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(FORECAST_DATA),
+      json: () => Promise.resolve({ forecast: FORECAST_DATA, timestamp: "2026-07-22T12:00:00Z" }),
     });
 
     await loadForecast();
@@ -1079,7 +1079,7 @@ describe("forecast", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve([]),
+      json: () => Promise.resolve({ forecast: [], timestamp: null }),
     });
 
     await loadForecast();

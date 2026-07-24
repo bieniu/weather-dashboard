@@ -227,10 +227,11 @@ async def test_get_sun_with_data(async_client, db_session) -> None:
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_get_forecast_empty(async_client) -> None:
-    """GET /api/weather/forecast returns [] when no data exists."""
+    """GET /api/weather/forecast returns empty forecast when no data exists."""
     resp = await async_client.get("/api/weather/forecast")
     assert resp.status_code == 200
-    assert resp.json() == []
+    data = resp.json()
+    assert data == {"forecast": [], "timestamp": None}
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
@@ -261,7 +262,8 @@ async def test_get_forecast_with_data(async_client, db_session) -> None:
     resp = await async_client.get("/api/weather/forecast")
     assert resp.status_code == 200
     data = resp.json()
-    assert data == forecast_data
+    assert data["forecast"] == forecast_data
+    assert data["timestamp"] == "2026-06-23T12:00:00+00:00"
 
 
 async def test_get_analytics_disabled(async_client) -> None:
