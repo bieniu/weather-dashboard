@@ -266,6 +266,53 @@ async def test_get_forecast_with_data(async_client, db_session) -> None:
     assert data["timestamp"] == "2026-06-23T12:00:00+00:00"
 
 
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_forecast_null_value_str(async_client, db_session) -> None:
+    """GET /api/weather/forecast returns empty when value_str is null."""
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    now = datetime.now(UTC)
+    reading = WeatherReading(
+        parameter="forecast",
+        value_str=None,
+        timestamp=now,
+    )
+    db_session.add(reading)
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/forecast")
+    assert resp.status_code == 200
+    assert resp.json() == {"forecast": [], "timestamp": None}
+
+
+async def test_get_forecast_no_forecast_sensor(async_client) -> None:
+    """GET /api/weather/forecast returns empty when no forecast sensor configured."""
+    from app.config import settings  # ty: ignore[unresolved-import]
+
+    forecast_key = next(k for k, s in settings.sensors.items() if s.type == "forecast")
+    sensor = settings.sensors.pop(forecast_key)
+    try:
+        resp = await async_client.get("/api/weather/forecast")
+        assert resp.status_code == 200
+        assert resp.json() == {"forecast": [], "timestamp": None}
+    finally:
+        settings.sensors[forecast_key] = sensor
+
+
+async def test_get_alerts_no_alerts_sensor(async_client) -> None:
+    """GET /api/weather/alerts returns [] when no alerts sensor configured."""
+    from app.config import settings  # ty: ignore[unresolved-import]
+
+    alerts_key = next(k for k, s in settings.sensors.items() if s.type == "alerts")
+    sensor = settings.sensors.pop(alerts_key)
+    try:
+        resp = await async_client.get("/api/weather/alerts")
+        assert resp.status_code == 200
+        assert resp.json() == []
+    finally:
+        settings.sensors[alerts_key] = sensor
+
+
 async def test_get_analytics_disabled(async_client) -> None:
     """GET /api/weather/analytics returns {} when Umami is not configured."""
     resp = await async_client.get("/api/weather/analytics")

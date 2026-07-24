@@ -408,6 +408,14 @@ describe("connectWebSocket", () => {
     wsMock.onerror(new Event("error"));
     expect(wsMock.close).toHaveBeenCalledOnce();
   });
+
+  it("logs warning on parse error", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    connectWebSocket();
+    wsMock.onmessage({ data: "not-json" });
+    expect(console.warn).toHaveBeenCalledWith("[WS] Message parse error:", expect.any(Error));
+    vi.restoreAllMocks();
+  });
 });
 
 describe("initThemeToggle", () => {
@@ -1094,6 +1102,92 @@ describe("forecast", () => {
     await loadForecast();
     expect(console.error).toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+
+  it("updateCard resets remaining columns when fewer than 5 forecast items arrive", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    // First populate all 5 columns
+    updateCard("forecast", FORECAST_DATA, null, "2026-07-22T12:00:00Z");
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[4].querySelector(".forecast-col__day").textContent).not.toBe("--");
+
+    // Now update with only 2 items — remaining columns should reset
+    const partialData = FORECAST_DATA.slice(0, 2);
+    updateCard("forecast", partialData, null, "2026-07-22T13:00:00Z");
+
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    // Columns 2-4 should be reset to placeholder
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__icon").src).toBe("");
+    expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__cloud-value").textContent).toBe("--");
+    expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("--");
+    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("--");
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("--");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("updateCard shows -- for null forecast values instead of NaN", () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const dataWithNulls = [
+      { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: null, precipitation: null, cloud_coverage: null, wind_speed: null },
+    ];
+    updateCard("forecast", dataWithNulls, null, "2026-07-22T12:00:00Z");
+
+    const cols = card.querySelectorAll(".forecast-col");
+    expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("--");
+    expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("--");
+
+    delete sensorsConfig.forecast;
+  });
+
+  it("loadForecast uses server timestamp when available", async () => {
+    sensorsConfig.forecast = SENSOR_FORECAST.forecast;
+    const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ forecast: FORECAST_DATA.slice(0, 1), timestamp: "2026-07-22T14:00:00Z" }),
+    });
+
+    await loadForecast();
+
+    const updated = document.getElementById("forecast-updated");
+    expect(updated.textContent).toContain("14:00:00");
+
+    delete sensorsConfig.forecast;
+  });
+  it("loadHistory updates condition sensor from history data", async () => {
+    sensorsConfig.condition = SENSOR_CONDITION.condition;
+    const card = createCard("condition", SENSOR_CONDITION.condition, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    const history = [
+      { timestamp: "2025-06-24T13:00:00Z", value_str: "Pochmurnie", icon: "mdi:weather-cloudy" },
+      { timestamp: "2025-06-24T14:00:00Z", value_str: "Słonecznie", icon: "mdi:weather-sunny" },
+    ];
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(history),
+    });
+
+    await loadHistory("condition");
+    expect(document.getElementById("condition-value").textContent).toBe("Słonecznie");
+    expect(document.getElementById("condition-icon-img").src).toContain("sunny.svg");
+    delete sensorsConfig.condition;
   });
 
   it("loadHistory skips forecast sensor", async () => {
