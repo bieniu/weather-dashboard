@@ -688,6 +688,7 @@ async function init() {
 document.addEventListener("DOMContentLoaded", init);
 
 export {
+  updateForecastLayout,
   getConditionSvgPath,
   getPolishDayAbbr,
   rerenderConditionIcons,
