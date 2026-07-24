@@ -8,6 +8,7 @@ Client-side SPA — Weather Dashboard UI. Displays real-time sensor readings (te
 - **Chart.js 4.4.3** (CDN) with `chartjs-adapter-date-fns` for time-axis charts. Each numeric sensor gets a line chart (140px tall, 144-point rolling window, 12-hour history by default). Charts are responsive, themed via CSS custom properties, and animate on new data.
 - **CSS custom properties** for theming — light/dark mode toggled via `data-theme` attribute on `<html>`. Design tokens control background, surface, text, border, accent, and status colors. Transitions are 0.3s ease.
 - **BEM-like class naming** (`weather-card__value`, `forecast-col__day`, `status--connected`). Layout uses CSS Grid (`auto-fill, minmax(380px, 1fr)`) with a single-column breakpoint at 640px.
+- **Responsive forecast layout** — JS-driven via `updateForecastLayout()`. On resize, it reads `gridTemplateColumns` from the weather-grid; if only 1 column fits (narrow viewport), it adds `.forecast-grid--compact` which switches from 5 to 4 columns and hides the 5th day period with `display: none`.
 - **Fonts**: Sora (display), Inter (body), JetBrains Mono (chart ticks) via Google Fonts. Material Symbols Rounded for icons.
 - **PWA**: `manifest.json` enables "standalone" display with 192/512 icons. `service-worker.js` precaches app shell and serves cached-on-fallback for GET requests.
 - **Weather icons**: 16 SVG weather icons (Meteocons fill style) in `weather_icons/`. Condition mapping resolves `mdi:` prefixed codes to SVG files, with day/night variants for partly cloudy.
@@ -16,8 +17,9 @@ Client-side SPA — Weather Dashboard UI. Displays real-time sensor readings (te
 1. **DOMContentLoaded** → `init()` fires:
    - Theme toggle initialized (respects `prefers-color-scheme`).
    - `GET /api/weather/sensors` fetches sensor config (name, type, unit, color, icon, history window).
-   - Cards are created dynamically from sensor config and appended to `#weather-grid`. Numeric sensors get a `<canvas>` for Chart.js; condition/text/forecast/alerts get specialized layouts.
-   - `GET /api/weather/history/{parameter}?hours=N` loads historical data for each sensor (populates charts and last-value cards).
+    - Cards are created dynamically from sensor config and appended to `#weather-grid`. Numeric sensors get a `<canvas>` for Chart.js; condition/text/forecast/alerts get specialized layouts.
+    - `updateForecastLayout()` fires right after card creation — reads `gridTemplateColumns` from `#weather-grid`, toggles `.forecast-grid--compact` on `.forecast-grid` if only 1 column fits. A resize listener keeps the layout responsive.
+    - `GET /api/weather/history/{parameter}?hours=N` loads historical data for each sensor (populates charts and last-value cards).
    - `GET /api/weather/forecast` loads 5-period forecast data — response is `{forecast: [...], timestamp: "..."}`, extracts `data.forecast` array and uses server-provided `data.timestamp` for the card update.
    - `GET /api/weather/alerts` loads active meteorological alerts.
    - `GET /api/weather/sun` loads sun state (above/below horizon) for day/night icon selection.
