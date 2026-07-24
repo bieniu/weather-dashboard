@@ -1,7 +1,7 @@
 {
     "metadata": {
         "version": "1.0.0",
-        "last_run": "2026-07-24T10:16:11.850Z",
+        "last_run": "2026-07-24T11:29:07.394Z",
         "root": "/home/maciek/develop/weather-dashboard",
         "include_patterns": [
             "backend/app/**/*.py",
@@ -47,7 +47,7 @@
     },
     "file_hashes": {
         ".dockerignore": "677ead07de42abf014d3e6663815a93d",
-        ".gitignore": "84c3a5f4e226d7de692bd61d3cbe3a25",
+        ".gitignore": "e2c8fb11f5ffc591ae5ea46e38a27399",
         ".pre-commit-config.yaml": "1733056923143259fc4aa6f11b133752",
         ".prettierignore": "699e652707ab1bbf4033fe1e6d6b20e0",
         ".prettierrc": "f69e448e521f5d9e713225a51b202673",
@@ -61,12 +61,12 @@
         "backend/app/mqtt_client.py": "3d9ad04be54985056c6e0404ae8c798c",
         "backend/app/ratelimit.py": "8baf6148540d6beb5bed9edbfddda655",
         "backend/app/routers/__init__.py": "12ed79bc7fb51f905c427b7984a58e25",
-        "backend/app/routers/weather.py": "f70437b72865b3884afb1182e2f46f0f",
+        "backend/app/routers/weather.py": "be97d2e9308caa5179051603ff0ee9f1",
         "backend/app/schemas.py": "de7f8a4cb3754f83e426fecbc5a564a7",
         "config.yaml": "f543744c1e142a1951f72795f57bae5d",
         "docker-compose.yml": "099d61f06ce6c4c997478309dc2a1473",
         "eslint.config.js": "02066baac5b3e6d921b13a26c2773f73",
-        "frontend/app.js": "7a3bbfadbfae83dcb7601d6955cc25ba",
+        "frontend/app.js": "30a3ff71bafce1fbafb8e517dc77ff11",
         "frontend/index.html": "f55ce912b33bb462b8e0e0b4bd6014ec",
         "frontend/manifest.json": "a6b1586653442f3e2fa76b7320f16977",
         "frontend/service-worker.js": "66c74cba8a73d794465bd403f935e470",
@@ -78,11 +78,11 @@
         "vitest.config.js": "74563c033bb95c730ea1ad0f810eae15"
     },
     "folder_hashes": {
-        ".": "5ab6019e68adb7fc1146ff5101d9141d",
-        "backend": "6a5ad64e3eb65faef652f2d30c31c024",
-        "backend/app": "6a5ad64e3eb65faef652f2d30c31c024",
-        "backend/app/routers": "98d2bd279f4845d74b870d2667467ca5",
-        "frontend": "7843df50f8ecc633dcd04fc71a1a240e",
+        ".": "c0fbac900f08e54f1fa99c948e877f61",
+        "backend": "a304692d1891dc1e5894244b098680d1",
+        "backend/app": "a304692d1891dc1e5894244b098680d1",
+        "backend/app/routers": "74c89a0477accdf91ba8a3974f74d4d4",
+        "frontend": "6ab04788265f9d153be3049167127250",
         "scripts": "5c72958b8991a4f953a63e6462af056c",
         "utils": "63a4c723f848712df333ae72ec92af1e"
     }

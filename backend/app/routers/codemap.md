@@ -8,8 +8,8 @@ API Router Layer — HTTP endpoint handlers and WebSocket endpoint for weather d
 
 - **Single `APIRouter` instance** (`prefix="/api/weather"`) registered in `main.py` via `app.include_router()`.
 - **Stateless handlers** — all per-request state (DB session) injected via `Depends(get_db)`.
-- **Read-only REST** — no POST/PUT/DELETE endpoints; data enters the system exclusively through MQTT ingestion (`mqtt_client.py`).
-- **Response serialisation** via Pydantic `response_model` (`WeatherReadingOut`) with `from_attributes=True` for ORM-to-schema coercion.
+- **Read-only REST** — no POST/PUT/DELETE endpoints; data enters the system exclusively through MQTT ingestion (`mqtt_client.py`). The `/forecast` and `/sun` endpoints use manual dict serialisation (including UTC timezone handling) instead of Pydantic `response_model`.
+- **Response serialisation** — numeric sensor endpoints use Pydantic `response_model` (`WeatherReadingOut`) with `from_attributes=True` for ORM-to-schema coercion; `/forecast` and `/sun` return hand-constructed dicts with ISO 8601 timestamps.
 - **WebSocket** delegates lifecycle to `WebSocketManager` (connection tracking, broadcast) from `mqtt_client.py`; the endpoint only handles accept/disconnect and a blocking receive loop for keep-alive.
 - **Config-driven sensor enumeration** — `/sensors` and `/current` iterate `settings.sensors`; `/history` and `/alerts` validate parameters against it.
 - **No middleware or auth** — rate limiting is applied at the app level (`RateLimitMiddleware`), not per-route.
@@ -45,7 +45,7 @@ Specific endpoint data flows:
 | `GET /history/{param}` | `WeatherReading` table | Time-range filter (`>= now - N hours`), ordered by `timestamp ASC` |
 | `GET /alerts` | `WeatherReading` table | Filtered by `alerts_key` parameter + `valid_to > now`, ordered by `timestamp DESC` |
 | `GET /sun` | `WeatherReading` table | Single `LIMIT 1` where `parameter == "sun"` |
-| `GET /forecast` | `WeatherReading` table | Single `LIMIT 1` where sensor `type == "forecast"`, then `json.loads(value_str)` |
+| `GET /forecast` | `WeatherReading` table | Single `LIMIT 1` where sensor `type == "forecast"`, returns `{forecast: json.loads(value_str), timestamp: iso_string}` |
 | `GET /analytics` | `settings.umami_host` / `settings.umami_id` | None — pure config lookup |
 | `WS /ws` | `WebSocketManager` (MQTT push) | No DB query — passive receive loop |
 
