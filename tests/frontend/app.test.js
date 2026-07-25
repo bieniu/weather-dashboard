@@ -998,7 +998,7 @@ describe("forecast", () => {
     const cols = card.querySelectorAll(".forecast-col");
 
     // Item 0: daytime cloudy
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
     expect(cols[0].querySelector(".forecast-col__period").textContent).toBe("dzień");
     expect(cols[0].querySelector(".forecast-col__temp-value").textContent).toBe("23°C");
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("0 mm");
@@ -1006,7 +1006,7 @@ describe("forecast", () => {
     expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
 
     // Item 2: daytime partlycloudy
-    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("czw");
     expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("dzień");
     expect(cols[2].querySelector(".forecast-col__temp-value").textContent).toBe("20°C");
     expect(cols[2].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
@@ -1014,7 +1014,7 @@ describe("forecast", () => {
     expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("17 km/h");
 
     // Item 3: nighttime partlycloudy
-    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("piątek");
+    expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("pią");
     expect(cols[3].querySelector(".forecast-col__period").textContent).toBe("noc");
     expect(cols[3].querySelector(".forecast-col__temp-value").textContent).toBe("18°C");
     expect(cols[3].querySelector(".forecast-col__precip-value").textContent).toBe("1 mm");
@@ -1022,7 +1022,7 @@ describe("forecast", () => {
     expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
 
     // Item 4: daytime rainy
-    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("piątek");
+    expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("pią");
     expect(cols[4].querySelector(".forecast-col__period").textContent).toBe("dzień");
     expect(cols[4].querySelector(".forecast-col__temp-value").textContent).toBe("22°C");
     expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
@@ -1078,7 +1078,7 @@ describe("forecast", () => {
     await loadForecast();
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
     expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
 
     delete sensorsConfig.forecast;
@@ -1119,8 +1119,8 @@ describe("forecast", () => {
     const partialData = FORECAST_DATA.slice(0, 2);
     updateCard("forecast", partialData, null, "2026-07-22T13:00:00Z");
 
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
-    expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("czwartek");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
+    expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("czw");
     // Columns 2-4 should be reset to placeholder
     expect(cols[2].querySelector(".forecast-col__day").textContent).toBe("--");
     expect(cols[2].querySelector(".forecast-col__period").textContent).toBe("--");
@@ -1217,7 +1217,7 @@ describe("forecast", () => {
     });
 
     const cols = card.querySelectorAll(".forecast-col");
-    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("środa");
+    expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
     expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
     delete globalThis.WebSocket;
     delete sensorsConfig.forecast;
