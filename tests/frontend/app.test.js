@@ -947,13 +947,13 @@ describe("forecast", () => {
   ];
 
   it("getPolishDayAbbr returns correct Polish abbreviations", () => {
-    expect(getPolishDayAbbr(new Date("2026-07-20"))).toBe("poniedziałek");
-    expect(getPolishDayAbbr(new Date("2026-07-21"))).toBe("wtorek");
-    expect(getPolishDayAbbr(new Date("2026-07-22"))).toBe("środa");
-    expect(getPolishDayAbbr(new Date("2026-07-23"))).toBe("czwartek");
-    expect(getPolishDayAbbr(new Date("2026-07-24"))).toBe("piątek");
-    expect(getPolishDayAbbr(new Date("2026-07-25"))).toBe("sobota");
-    expect(getPolishDayAbbr(new Date("2026-07-26"))).toBe("niedziela");
+    expect(getPolishDayAbbr(new Date("2026-07-20"))).toBe("pon");
+    expect(getPolishDayAbbr(new Date("2026-07-21"))).toBe("wto");
+    expect(getPolishDayAbbr(new Date("2026-07-22"))).toBe("śro");
+    expect(getPolishDayAbbr(new Date("2026-07-23"))).toBe("czw");
+    expect(getPolishDayAbbr(new Date("2026-07-24"))).toBe("pią");
+    expect(getPolishDayAbbr(new Date("2026-07-25"))).toBe("sob");
+    expect(getPolishDayAbbr(new Date("2026-07-26"))).toBe("nie");
   });
 
   it("getConditionSvgPath uses isDaytime parameter for partlycloudy", () => {
