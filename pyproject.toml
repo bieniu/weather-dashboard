@@ -41,6 +41,7 @@ target-version = "py314"
 lint.select = ["ALL"]
 lint.ignore = [
     "COM812",   # Trailing comma missing
+    "CPY001",   # Missing copyright notice at top of file
     "D203",     # 1 blank line required before class docstring
     "D213",     # Multi-line docstring summary should start at the second line
 ]
