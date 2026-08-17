@@ -12,6 +12,15 @@ updates:
           - "prek"
           - "ruff"
           - "ty"
+      test:
+        patterns:
+          - "freezegun"
+          - "httpx"
+          - "pytest-*"
+          - "pytest"
+      runtime:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
