@@ -69,8 +69,8 @@ async def get_history(
     return (await db.execute(stmt)).scalars().all()
 
 
-@router.get("/alerts", response_model=list[WeatherReadingOut])
-async def get_alerts(
+@router.get("/weather_alerts", response_model=list[WeatherReadingOut])
+async def get_weather_alerts(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Sequence[WeatherReading]:
     """Return all currently-valid alert readings (valid_to > now), newest first."""

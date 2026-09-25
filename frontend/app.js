@@ -88,25 +88,25 @@ const alerts = [];
 let alertTimerId = null;
 
 function showAlertCard(alert) {
-  const card = document.getElementById("card-alerts");
+  const card = document.getElementById("card-weather-alerts");
   if (!card) return;
 
-  const img = document.getElementById("alerts-icon-img");
+  const img = document.getElementById("weather_alerts-icon-img");
   if (img) {
     img.src =
       alert.level == null ? ALERT_GREEN_ICON : ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
     img.alt = alert.level ?? "green";
   }
-  const valueEl = document.getElementById("alerts-value");
+  const valueEl = document.getElementById("weather_alerts-value");
   if (valueEl) valueEl.textContent = alert.value;
-  const updatedEl = document.getElementById("alerts-updated");
+  const updatedEl = document.getElementById("weather_alerts-updated");
   if (updatedEl) updatedEl.textContent = alert.updatedText || "";
 
   card.style.display = "";
 }
 
 function hideAlertCard() {
-  const card = document.getElementById("card-alerts");
+  const card = document.getElementById("card-weather-alerts");
   if (card) card.style.display = "none";
 }
 
@@ -211,7 +211,7 @@ async function loadForecast() {
 
 async function loadAlerts() {
   try {
-    const res = await fetch(`${API_BASE}/alerts`);
+    const res = await fetch(`${API_BASE}/weather_alerts`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     alerts.length = 0;
@@ -564,7 +564,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.parameter === "alerts") {
+      if (data.parameter === "weather_alerts") {
         handleAlertUpdate({
           value: data.value,
           valid_to: data.valid_to,
