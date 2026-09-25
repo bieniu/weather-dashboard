@@ -30,6 +30,13 @@ _MIGRATIONS: list[tuple[str, str]] = [
     ("valid_to", "DATETIME"),
 ]
 
+_DATA_MIGRATIONS: list[str] = [
+    (
+        "UPDATE weather_readings SET parameter = 'weather_alerts' "
+        "WHERE parameter = 'alerts'"
+    ),
+]
+
 
 async def init_db(
     custom_engine: AsyncEngine | None = None,
@@ -48,6 +55,8 @@ async def init_db(
                         f"ALTER TABLE weather_readings ADD COLUMN {col_name} {col_type}"
                     )
                 )
+        for statement in _DATA_MIGRATIONS:
+            await conn.execute(text(statement))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:

@@ -63,6 +63,32 @@ async def test_init_db_adds_missing_columns(db_engine) -> None:
             assert col_name in cols
 
 
+async def test_init_db_renames_alerts_parameter(db_engine) -> None:
+    """Verify init_db renames legacy ``alerts`` rows to ``weather_alerts``."""
+    from app.database import init_db  # ty: ignore[unresolved-import]
+
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO weather_readings (parameter, unit, value_str, timestamp) "
+                "VALUES ('alerts', '', 'burze', '2026-09-25 12:00:00'), "
+                "('temperature', '°C', NULL, '2026-09-25 12:00:00')"
+            )
+        )
+
+    await init_db(custom_engine=db_engine)
+    await init_db(custom_engine=db_engine)
+
+    async with db_engine.connect() as conn:
+        result = await conn.execute(
+            text("SELECT parameter FROM weather_readings ORDER BY id")
+        )
+        assert [row[0] for row in result.fetchall()] == [
+            "weather_alerts",
+            "temperature",
+        ]
+
+
 async def test_get_db_yields_session(db_engine) -> None:
     """Verify get_db dependency yields an AsyncSession."""
     from app.database import get_db  # ty: ignore[unresolved-import]

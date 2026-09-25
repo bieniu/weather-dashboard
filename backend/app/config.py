@@ -1,6 +1,7 @@
 """Application configuration — loading environment variables."""
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -9,7 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
-def _load_config_yaml() -> dict:
+def _load_config_yaml() -> dict[str, Any]:
+    """Load the configuration from the YAML file."""
     with (ROOT_DIR / "config.yaml").open(encoding="utf-8") as f:
         return yaml.safe_load(f)
 

@@ -91,7 +91,7 @@ async def test_get_sensors_structure(async_client) -> None:
     resp = await async_client.get("/api/weather/sensors")
     data = resp.json()
     expected_sensors = {
-        "alerts",
+        "weather_alerts",
         "condition",
         "forecast",
         "air_quality",
@@ -117,30 +117,30 @@ async def test_get_sensors_structure(async_client) -> None:
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
-async def test_get_alerts_empty_db(async_client) -> None:
-    """GET /api/weather/alerts returns empty list when no alerts exist."""
-    resp = await async_client.get("/api/weather/alerts")
+async def test_get_weather_alerts_empty_db(async_client) -> None:
+    """GET /api/weather/weather_alerts returns empty list when no alerts exist."""
+    resp = await async_client.get("/api/weather/weather_alerts")
     assert resp.status_code == 200
     assert resp.json() == []
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
-async def test_get_alerts_filters_expired(async_client, db_session) -> None:
-    """GET /api/weather/alerts returns only valid alerts (valid_to > now)."""
+async def test_get_weather_alerts_filters_expired(async_client, db_session) -> None:
+    """GET /api/weather/weather_alerts returns only valid alerts (valid_to > now)."""
     from datetime import timedelta
 
     from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     now = datetime.now(UTC)
     valid = WeatherReading(
-        parameter="alerts",
+        parameter="weather_alerts",
         value_str="burze",
         level="yellow",
         valid_to=now + timedelta(hours=24),
         timestamp=now,
     )
     expired = WeatherReading(
-        parameter="alerts",
+        parameter="weather_alerts",
         value_str="stare",
         level="red",
         valid_to=now - timedelta(hours=1),
@@ -149,7 +149,7 @@ async def test_get_alerts_filters_expired(async_client, db_session) -> None:
     db_session.add_all([valid, expired])
     await db_session.commit()
 
-    resp = await async_client.get("/api/weather/alerts")
+    resp = await async_client.get("/api/weather/weather_alerts")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
@@ -158,22 +158,24 @@ async def test_get_alerts_filters_expired(async_client, db_session) -> None:
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
-async def test_get_alerts_ordered_newest_first(async_client, db_session) -> None:
-    """GET /api/weather/alerts returns valid alerts ordered by timestamp DESC."""
+async def test_get_weather_alerts_ordered_newest_first(
+    async_client, db_session
+) -> None:
+    """GET /api/weather/weather_alerts returns valid alerts, newest first."""
     from datetime import timedelta
 
     from app.models import WeatherReading  # ty: ignore[unresolved-import]
 
     now = datetime.now(UTC)
     older = WeatherReading(
-        parameter="alerts",
+        parameter="weather_alerts",
         value_str="older",
         level="yellow",
         valid_to=now + timedelta(hours=24),
         timestamp=now - timedelta(hours=2),
     )
     newer = WeatherReading(
-        parameter="alerts",
+        parameter="weather_alerts",
         value_str="newer",
         level="orange",
         valid_to=now + timedelta(hours=24),
@@ -182,7 +184,7 @@ async def test_get_alerts_ordered_newest_first(async_client, db_session) -> None
     db_session.add_all([older, newer])
     await db_session.commit()
 
-    resp = await async_client.get("/api/weather/alerts")
+    resp = await async_client.get("/api/weather/weather_alerts")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
@@ -299,14 +301,14 @@ async def test_get_forecast_no_forecast_sensor(async_client) -> None:
         settings.sensors[forecast_key] = sensor
 
 
-async def test_get_alerts_no_alerts_sensor(async_client) -> None:
-    """GET /api/weather/alerts returns [] when no alerts sensor configured."""
+async def test_get_weather_alerts_no_alerts_sensor(async_client) -> None:
+    """GET /api/weather/weather_alerts returns [] when no alerts sensor configured."""
     from app.config import settings  # ty: ignore[unresolved-import]
 
     alerts_key = next(k for k, s in settings.sensors.items() if s.type == "alerts")
     sensor = settings.sensors.pop(alerts_key)
     try:
-        resp = await async_client.get("/api/weather/alerts")
+        resp = await async_client.get("/api/weather/weather_alerts")
         assert resp.status_code == 200
         assert resp.json() == []
     finally:

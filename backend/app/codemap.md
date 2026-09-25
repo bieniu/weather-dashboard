@@ -46,7 +46,7 @@ MQTT broker ──`{topic_prefix}/#`──→ aiomqtt.Client (mqtt_listener)
 HTTP GET /api/weather/sensors        → settings.sensors model_dump (no DB)
 HTTP GET /api/weather/current        → latest WeatherReading per sensor
 HTTP GET /api/weather/history/{p}?hours=N → readings in time range
-HTTP GET /api/weather/alerts         → readings with valid_to > now
+HTTP GET /api/weather/weather_alerts         → readings with valid_to > now
 HTTP GET /api/weather/sun            → latest sun position reading
 HTTP GET /api/weather/forecast       → latest forecast (JSON string parsed)
 HTTP GET /api/weather/analytics      → umami_host/umami_id if configured
