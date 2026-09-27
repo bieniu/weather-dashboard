@@ -212,3 +212,6 @@ coverage/
 
 weather.db
 backend/weather.db
+
+# omc
+.omc/
