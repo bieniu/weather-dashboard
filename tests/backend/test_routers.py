@@ -79,6 +79,86 @@ async def test_get_history(async_client, db_session) -> None:
     assert len(data) == 2
 
 
+@pytest.mark.parametrize(
+    ("hours", "status"),
+    [(0, 422), (-1, 422), (721, 422), (10**11, 422), (1, 200), (720, 200)],
+)
+async def test_get_history_hours_bounds(async_client, hours, status) -> None:
+    """GET /history/{param} validates 1 <= hours <= 720 instead of erroring."""
+    resp = await async_client.get(f"/api/weather/history/temperature?hours={hours}")
+    assert resp.status_code == status
+
+
+def _websocket_scope() -> dict:
+    return {
+        "type": "websocket",
+        "asgi": {"version": "3.0"},
+        "scheme": "ws",
+        "path": "/api/weather/ws",
+        "raw_path": b"/api/weather/ws",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("test", 80),
+        "subprotocols": [],
+    }
+
+
+async def test_websocket_endpoint_tracks_connection_lifecycle() -> None:
+    """The WS endpoint registers the client on accept and removes it on close.
+
+    Drives the ASGI app directly with a scripted websocket scope, so no
+    TestClient/portal is needed and the assertions are deterministic.
+    """
+    from app.main import app  # ty: ignore[unresolved-import]
+    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
+
+    incoming = [
+        {"type": "websocket.connect"},
+        {"type": "websocket.receive", "text": "ping"},
+        {"type": "websocket.disconnect", "code": 1000},
+    ]
+    sent: list[dict] = []
+    connections_at_receive: list[int] = []
+
+    async def receive() -> dict:
+        connections_at_receive.append(len(manager.active_connections))
+        return incoming.pop(0)
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    await app(_websocket_scope(), receive, send)
+
+    assert sent[0]["type"] == "websocket.accept"
+    # connect handshake (0), then keep-alive text and disconnect while registered (1, 1)
+    assert connections_at_receive == [0, 1, 1]
+    assert manager.active_connections == set()
+
+
+async def test_websocket_endpoint_unregisters_on_unexpected_error() -> None:
+    """A failure other than WebSocketDisconnect still removes the connection."""
+    from app.main import app  # ty: ignore[unresolved-import]
+    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
+
+    incoming: list[dict] = [{"type": "websocket.connect"}]
+
+    async def receive() -> dict:
+        if incoming:
+            return incoming.pop(0)
+        msg = "transport failure"
+        raise RuntimeError(msg)
+
+    async def send(_message: dict) -> None:
+        pass
+
+    with pytest.raises(RuntimeError, match="transport failure"):
+        await app(_websocket_scope(), receive, send)
+
+    assert manager.active_connections == set()
+
+
 async def test_get_history_invalid_parameter(async_client) -> None:
     """GET /api/weather/history/{param} with unknown sensor returns 400."""
     resp = await async_client.get("/api/weather/history/nonexistent")

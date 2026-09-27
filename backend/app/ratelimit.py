@@ -17,11 +17,15 @@ if TYPE_CHECKING:
 RATE_LIMIT = 100
 WINDOW_SECONDS = 60
 CLEANUP_EVERY = 100
+LIMITED_PATH_PREFIX = "/api/"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter keyed by `request.state.real_ip`.
 
+    Only paths under ``/api/`` are counted; static assets pass through untouched.
+    WebSocket upgrades never reach ``dispatch`` (BaseHTTPMiddleware forwards
+    non-HTTP scopes directly), so they are not limited here.
     Returns 429 Too Many Requests when the limit is exceeded.
     """
 
@@ -37,7 +41,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         """Check rate limit and reject with 429 if exceeded."""
-        if request.url.path.startswith("/api/weather/ws"):
+        if not request.url.path.startswith(LIMITED_PATH_PREFIX):
             return await call_next(request)
 
         ip = getattr(request.state, "real_ip", "unknown")

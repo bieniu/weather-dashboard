@@ -16,6 +16,40 @@ async def test_cloudflare_ip_middleware_sets_real_ip(
     assert resp.status_code == 200
 
 
+async def test_rate_limit_is_keyed_by_cloudflare_ip(async_client) -> None:
+    """Through the real stack, the limiter sees Cf-Connecting-IP per client."""
+    from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
+
+    ip_a = {"Cf-Connecting-IP": "198.51.100.1"}
+    ip_b = {"Cf-Connecting-IP": "198.51.100.2"}
+
+    for _ in range(RATE_LIMIT):
+        resp = await async_client.get("/api/weather/sensors", headers=ip_a)
+        assert resp.status_code == 200
+
+    resp = await async_client.get("/api/weather/sensors", headers=ip_a)
+    assert resp.status_code == 429
+
+    resp = await async_client.get("/api/weather/sensors", headers=ip_b)
+    assert resp.status_code == 200
+
+
+async def test_rate_limit_skips_static_paths(async_client) -> None:
+    """An exhausted API budget does not block the frontend's static files."""
+    from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
+
+    ip = {"Cf-Connecting-IP": "198.51.100.3"}
+    for _ in range(RATE_LIMIT):
+        await async_client.get("/api/weather/sensors", headers=ip)
+    resp = await async_client.get("/api/weather/sensors", headers=ip)
+    assert resp.status_code == 429
+
+    resp = await async_client.get("/", headers=ip)
+    assert resp.status_code == 200
+    resp = await async_client.get("/health", headers=ip)
+    assert resp.status_code == 200
+
+
 async def test_csp_middleware_adds_header(async_client) -> None:
     """Every response includes a Content-Security-Policy header."""
     resp = await async_client.get("/api/weather/sensors")
