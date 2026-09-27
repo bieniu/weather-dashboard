@@ -75,6 +75,21 @@ def _reset_ws_manager() -> None:
     sun_state["value"] = None
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """Clear the app's rate-limiter windows so tests do not share a budget."""
+    from app.main import app  # ty: ignore[unresolved-import]
+    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
+
+    layer = app.middleware_stack  # None until the first request builds the stack
+    if layer is None:
+        return
+    while layer is not None and not isinstance(layer, RateLimitMiddleware):
+        layer = getattr(layer, "app", None)
+    assert layer is not None, "RateLimitMiddleware not found in the app stack"
+    layer._windows.clear()
+
+
 @pytest.fixture
 async def seed_data(db_session: AsyncSession) -> None:
     """Insert sample readings into the test database."""

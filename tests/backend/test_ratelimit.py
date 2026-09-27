@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 
 async def test_single_request_passes() -> None:
     """A single request under the limit is allowed through."""
@@ -74,20 +76,22 @@ async def test_rate_limit_returns_retry_after_header() -> None:
     assert resp.headers.get("Retry-After") == "60"
 
 
-async def test_websocket_path_bypasses_rate_limit() -> None:
-    """The WebSocket endpoint is excluded from rate limiting."""
+@pytest.mark.parametrize("path", ["/", "/index.html", "/style.css", "/health"])
+async def test_non_api_path_bypasses_rate_limit(path) -> None:
+    """Paths outside /api/ pass through without consuming the window."""
     from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
 
     middleware = RateLimitMiddleware(MagicMock())
 
     request = MagicMock()
-    request.url.path = "/api/weather/ws"
+    request.url.path = path
     request.state.real_ip = "1.2.3.4"
     call_next = AsyncMock()
     call_next.return_value = MagicMock(status_code=200)
 
     response = await middleware.dispatch(request, call_next)
     assert response.status_code == 200
+    assert "1.2.3.4" not in middleware._windows
 
 
 async def test_different_ips_have_separate_windows() -> None:

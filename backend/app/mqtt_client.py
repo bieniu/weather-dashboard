@@ -58,17 +58,17 @@ class WebSocketManager:
     """Manages active WebSocket connections and broadcasts messages."""
 
     def __init__(self) -> None:
-        """Initialize empty connection list."""
-        self.active_connections: list[WebSocket] = []
+        """Initialize empty connection set."""
+        self.active_connections: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections.add(websocket)
 
     def disconnect(self, websocket: WebSocket) -> None:
-        """Remove a WebSocket connection from the active list."""
-        self.active_connections.remove(websocket)
+        """Remove a WebSocket connection; a no-op if it is already gone."""
+        self.active_connections.discard(websocket)
 
     async def broadcast(self, data: dict[str, object]) -> None:
         """Broadcast JSON data to all connected clients."""
@@ -77,7 +77,7 @@ class WebSocketManager:
             try:
                 await connection.send_text(message)
             except Exception:  # noqa: BLE001
-                self.active_connections.remove(connection)
+                self.active_connections.discard(connection)
 
 
 manager = WebSocketManager()

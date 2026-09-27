@@ -11,12 +11,12 @@ Application Core — asynchronous FastAPI server acting as the ingestion, persis
 - **SQLAlchemy 2.0 async** with `aiosqlite` — declarative `Base` ORM model, `async_sessionmaker` factory, and `get_db` generator as a FastAPI dependency.
 - **Schema-driven serialization** — `WeatherReadingOut` Pydantic model with `from_attributes` and custom `field_serializer` for UTC-aware ISO 8601 output.
 - **MQTT ingestion via aiomqtt** — persistent `async for` message loop with automatic reconnection on `MqttError`; message dispatch dispatched to handler functions keyed by sensor type (`numeric`, `condition`, `text`, `alerts`, `forecast`).
-- **Middleware stack** (Starlette `BaseHTTPMiddleware`):
-  1. `CORSMiddleware` — permissive CORS from configured origins.
+- **Middleware stack** (Starlette `BaseHTTPMiddleware`, listed outer to inner; `main.py` adds them in reverse because the last `add_middleware` call becomes the outermost layer):
+  1. `CSPMiddleware` — applies Content-Security-Policy header to all responses.
   2. `CloudflareIPMiddleware` — reads `Cf-Connecting-IP` header to set `request.state.real_ip`.
-  3. `RateLimitMiddleware` — sliding-window rate limiter at 100 requests/60s per IP, bypassed for WebSocket upgrade.
-  4. `CSPMiddleware` — applies Content-Security-Policy header to all responses.
-- **WebSocket broadcast** — `WebSocketManager` singleton maintains an ephemeral list of connections; broadcast iterates a shallow copy, removing disconnected clients on send failure.
+  3. `RateLimitMiddleware` — sliding-window rate limiter at 100 requests/60s per IP, applied to `/api/*` paths only; WebSocket scopes never reach `BaseHTTPMiddleware.dispatch`.
+  4. `CORSMiddleware` — permissive CORS from configured origins.
+- **WebSocket broadcast** — `WebSocketManager` singleton maintains an ephemeral set of connections; broadcast iterates a copy, discarding disconnected clients on send failure; `disconnect()` is idempotent.
 - **Background task** — `cleanup_old_readings()` runs every hour as an asyncio task, deleting `WeatherReading` rows older than 30 days.
 - **Schema migration** — `init_db()` calls `Base.metadata.create_all` then applies additive column migrations from a `_MIGRATIONS` list via `ALTER TABLE ADD COLUMN` (idempotent, built-in, no Alembic).
 

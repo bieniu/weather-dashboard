@@ -58,7 +58,7 @@ pytest tests/backend -v --timeout=10 -k "test_mqtt"  # filter by name
 - **DB:** each test gets a fresh in-memory SQLite via `db_engine` fixture
 - **MQTT:** `_process_mqtt_message` tested directly with mock messages; `aiomqtt.Client` is never connected in tests
 - **Time:** `freezegun` for freezing `datetime.now(UTC)`
-- **WebSocket:** tested via `WebSocketManager` unit tests; endpoint test skipped (needs live ASGI)
+- **WebSocket:** `WebSocketManager` unit tests plus endpoint lifecycle tests that drive the ASGI app directly with a scripted websocket scope (no TestClient, no lifespan, so no MQTT connection)
 - **HTTP client:** `httpx.AsyncClient` with `ASGITransport` and `get_db` overridden to test engine
 
 ### Frontend (vitest)
@@ -100,9 +100,9 @@ Failing any of these must be fixed before the implementation is complete.
 | `test_models.py` | ORM creation, default timestamp, compound index |
 | `test_schemas.py` | `WeatherReadingOut` serialization, tz handling, nullables |
 | `test_mqtt_client.py` | Topic map, `WebSocketManager`, `_process_mqtt_message` (numeric, condition, error paths), broadcast |
-| `test_ratelimit.py` | Rate limiter (pass, 429, bypass, cleanup, per-IP isolation) |
+| `test_ratelimit.py` | Rate limiter unit tests (pass, 429, non-API bypass, cleanup, per-IP isolation) |
 | `test_routers.py` | REST endpoints (`/sensors`, `/current`, `/history`), sensor structure |
-| `test_main.py` | Middleware (CloudflareIP, CSP, CORS), DB cleanup task |
+| `test_main.py` | Middleware through the real stack (per-IP rate limit via `Cf-Connecting-IP`, static bypass, CSP, CORS), DB cleanup task |
 
 ### Test structure conventions
 

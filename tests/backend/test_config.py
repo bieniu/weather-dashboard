@@ -1,5 +1,7 @@
 """Tests for app.config — Settings and SensorConfig."""
 
+import pytest
+
 
 def test_sensor_config_defaults() -> None:
     """SensorConfig applies default type, round, unit, history_hours."""
@@ -10,6 +12,16 @@ def test_sensor_config_defaults() -> None:
     assert config.round == 1
     assert config.unit == ""
     assert config.history_hours == 24
+
+
+@pytest.mark.parametrize("history_hours", [0, -1, 721])
+def test_sensor_config_rejects_history_hours_out_of_range(history_hours) -> None:
+    """history_hours outside 1..720 fails at config load, not as a runtime 422."""
+    from app.config import SensorConfig  # ty: ignore[unresolved-import]
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        SensorConfig(name="Test", history_hours=history_hours)
 
 
 def test_sensor_config_explicit() -> None:

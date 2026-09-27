@@ -78,6 +78,20 @@ class TestWebSocketManager:
         assert good_ws in manager.active_connections
         assert dead_ws not in manager.active_connections
 
+    async def test_disconnect_is_idempotent(self) -> None:
+        """Disconnecting a client already dropped by broadcast must not raise."""
+        from app.mqtt_client import WebSocketManager  # ty: ignore[unresolved-import]
+
+        manager = WebSocketManager()
+        dead_ws = AsyncMock()
+        dead_ws.send_text.side_effect = Exception("gone")
+        await manager.connect(dead_ws)
+        await manager.broadcast({"parameter": "temperature", "value": 22.5})
+
+        manager.disconnect(dead_ws)
+        manager.disconnect(dead_ws)
+        assert manager.active_connections == set()
+
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_process_numeric_message(monkeypatch, db_engine) -> None:

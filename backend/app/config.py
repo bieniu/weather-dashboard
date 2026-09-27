@@ -3,10 +3,15 @@
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+# Upper bound for history windows (config and the /history API). Readings older
+# than 30 days are deleted by ``cleanup_old_readings`` in ``main.py``, so a
+# longer window could never return more data.
+MAX_HISTORY_HOURS = 24 * 30
 
 
 def _load_config_yaml() -> dict:
@@ -26,7 +31,7 @@ class SensorConfig(BaseModel):
     type: str = "numeric"
     round: int = 1
     unit: str = ""
-    history_hours: int = 24
+    history_hours: int = Field(default=24, ge=1, le=MAX_HISTORY_HOURS)
 
 
 class Settings(BaseSettings):

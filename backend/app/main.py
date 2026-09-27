@@ -121,8 +121,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(CloudflareIPMiddleware)
+# Starlette runs the middleware added LAST as the outermost layer, so the order
+# below yields: CSP -> CloudflareIP -> RateLimit -> CORS -> app. CloudflareIP must
+# wrap RateLimit so that `request.state.real_ip` is set before the limiter reads it.
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(CloudflareIPMiddleware)
 app.add_middleware(CSPMiddleware)
 
 app.include_router(weather_router)

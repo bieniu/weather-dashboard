@@ -4,7 +4,14 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from sqlalchemy import desc, select
 
 if TYPE_CHECKING:
@@ -14,7 +21,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002  # needed at runtime for get_type_hints
 )
 
-from app.config import settings
+from app.config import MAX_HISTORY_HOURS, settings
 from app.database import get_db
 from app.models import WeatherReading
 from app.mqtt_client import manager
@@ -51,9 +58,9 @@ async def get_current(
 async def get_history(
     parameter: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    hours: int = 12,
+    hours: Annotated[int, Query(ge=1, le=MAX_HISTORY_HOURS)] = 12,
 ) -> Sequence[WeatherReading]:
-    """Return reading history for the last `hours` hours (default 12)."""
+    """Return reading history for the last `hours` hours (default 12, max 720)."""
     if parameter not in settings.sensors:
         raise HTTPException(status_code=400, detail="Invalid parameter")
 
@@ -159,4 +166,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         while True:
             await websocket.receive_text()  # keep-alive / ping
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket)
