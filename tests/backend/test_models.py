@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from freezegun import freeze_time
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select, text
 
 
 def test_weather_reading_numeric_creation() -> None:
@@ -45,12 +45,50 @@ async def test_default_timestamp(db_session) -> None:
     await db_session.commit()
     await db_session.refresh(r)
 
-    # SQLite strips timezone — re-attach UTC like the app does
-    ts = r.timestamp
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=UTC)
+    assert r.timestamp == datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
+    assert r.timestamp.tzinfo is UTC
 
-    assert ts == datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
+
+async def test_utc_datetime_reads_naive_db_value_as_aware_utc(db_session) -> None:
+    """A naive DATETIME stored by SQLite loads back as an aware UTC datetime."""
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    await db_session.execute(
+        text(
+            "INSERT INTO weather_readings (parameter, unit, valid_to, timestamp) "
+            "VALUES ('alerts', '', '2026-06-23 18:00:00.000000', "
+            "'2026-06-23 12:00:00.000000')"
+        )
+    )
+    row = (await db_session.execute(select(WeatherReading))).scalar_one()
+
+    assert row.timestamp == datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
+    assert row.timestamp.tzinfo is UTC
+    assert row.valid_to == datetime(2026, 6, 23, 18, 0, 0, tzinfo=UTC)
+    assert row.valid_to.tzinfo is UTC
+
+
+async def test_utc_datetime_stores_other_offsets_as_utc(db_session) -> None:
+    """An aware non-UTC datetime is converted to UTC before SQLite drops the offset."""
+    from datetime import timedelta, timezone
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    warsaw_summer = timezone(timedelta(hours=2))
+    db_session.add(
+        WeatherReading(
+            parameter="temperature",
+            value=1.0,
+            unit="°C",
+            timestamp=datetime(2026, 6, 23, 14, 0, 0, tzinfo=warsaw_summer),
+        )
+    )
+    await db_session.commit()
+
+    stored = (
+        await db_session.execute(text("SELECT timestamp FROM weather_readings"))
+    ).scalar_one()
+    assert stored == "2026-06-23 12:00:00.000000"
 
 
 @pytest.mark.parametrize(

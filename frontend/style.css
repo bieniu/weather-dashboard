@@ -18,6 +18,8 @@
   --font-mono: "JetBrains Mono", monospace;
 
   --header-h: 56px;
+  --content-max: 1200px;
+  --transition: 0.3s ease; /* theme colour changes */
   --grid-gap: 16px; /* also baked into the 776px container query (2 * 380px + gap) */
   --card-radius: 8px;
   --card-padding: 16px;
@@ -79,8 +81,8 @@ body {
   color: var(--color-text);
   min-height: 100dvh;
   transition:
-    background 0.3s ease,
-    color 0.3s ease;
+    background var(--transition),
+    color var(--transition);
 }
 
 /* =============================================
@@ -93,8 +95,8 @@ body {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   transition:
-    background 0.3s ease,
-    border-color 0.3s ease;
+    background var(--transition),
+    border-color var(--transition);
 }
 
 .header__inner {
@@ -103,7 +105,7 @@ body {
   justify-content: space-between;
   gap: 16px;
   height: var(--header-h);
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin-inline: auto;
   padding: 0 16px;
 }
@@ -116,11 +118,6 @@ body {
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--color-text);
-}
-
-.header__title .material-symbols-rounded {
-  font-size: 1.5rem;
-  color: var(--color-accent);
 }
 
 .header__actions {
@@ -139,7 +136,7 @@ body {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text-secondary);
-  transition: color 0.3s ease;
+  transition: color var(--transition);
 }
 
 .status__dot {
@@ -147,7 +144,7 @@ body {
   height: 8px;
   border-radius: 50%;
   background: var(--color-error);
-  transition: background 0.3s ease;
+  transition: background var(--transition);
 }
 
 .status--connected .status__dot {
@@ -205,7 +202,7 @@ body {
    Main content & grid
    ============================================= */
 .main {
-  max-width: 1200px;
+  max-width: var(--content-max);
   margin-inline: auto;
   padding: 24px 16px 48px;
 }
@@ -218,6 +215,14 @@ body {
   /* Cards adapt to the column count via @container (width < 776px): keep that
      number equal to 2 * the 380px minimum above + --grid-gap. */
   container-type: inline-size;
+}
+
+/* Shown by app.js when the sensor configuration cannot be loaded. */
+.grid__error {
+  grid-column: 1 / -1;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--color-text-secondary);
 }
 
 /* =============================================
@@ -233,8 +238,8 @@ body {
   flex-direction: column;
   gap: 6px;
   transition:
-    background 0.3s ease,
-    border-color 0.3s ease;
+    background var(--transition),
+    border-color var(--transition);
   opacity: 0;
   transform: translateY(16px);
   animation: card-enter 0.5s ease-out forwards;
@@ -290,7 +295,7 @@ body {
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--color-text);
   border-radius: 4px;
-  transition: color 0.3s ease;
+  transition: color var(--transition);
 }
 
 .weather-card__unit {
@@ -350,20 +355,22 @@ body {
   margin-bottom: 0;
 }
 
-#card-condition,
-#card-air-quality,
-#card-alerts {
+/* Classes come from the sensor type (cards.js), so renaming a sensor key in
+   config.yaml cannot break the layout. */
+.weather-card--condition,
+.weather-card--text,
+.weather-card--alerts {
   gap: 0;
 }
 
-#card-alerts,
-#card-forecast {
+.weather-card--alerts,
+.weather-card--forecast {
   grid-column: 1 / -1;
 }
 
-#card-condition .weather-card__updated,
-#card-air-quality .weather-card__updated,
-#card-alerts .weather-card__updated {
+.weather-card--condition .weather-card__updated,
+.weather-card--text .weather-card__updated,
+.weather-card--alerts .weather-card__updated {
   margin: 0;
   margin-top: -8px;
 }
@@ -403,7 +410,7 @@ body {
   gap: 2px;
   padding: 8px 4px;
   border-radius: 6px;
-  transition: background 0.3s ease;
+  transition: background var(--transition);
 }
 
 .forecast-col__day {
@@ -476,7 +483,7 @@ body {
   }
 }
 
-#card-forecast .weather-card__updated {
+.weather-card--forecast .weather-card__updated {
   margin-top: 4px;
 }
 
@@ -484,10 +491,6 @@ body {
    Responsive
    ============================================= */
 @media (max-width: 640px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
   .header__title {
     font-size: 1rem;
   }

@@ -1,18 +1,14 @@
-"""Rate limiting middleware — sliding window per IP."""
+"""Client-IP resolution and sliding-window rate limiting per IP (pure ASGI)."""
 
 import time
 from collections import OrderedDict, deque
 from typing import TYPE_CHECKING
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from starlette.requests import Request
-    from starlette.responses import Response
-    from starlette.types import ASGIApp
+    from starlette.types import ASGIApp, Receive, Scope, Send
 
 RATE_LIMIT = 100
 WINDOW_SECONDS = 60
@@ -24,32 +20,55 @@ LIMITED_PATH_PREFIX = "/api/"
 MAX_TRACKED_IPS = 10_000
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Sliding-window rate limiter keyed by `request.state.real_ip`.
+def client_ip(scope: Scope) -> str:
+    """Return the client IP: ``Cf-Connecting-IP``, else the socket peer.
 
-    Only paths under ``/api/`` are counted; static assets pass through untouched.
-    WebSocket upgrades never reach ``dispatch`` (BaseHTTPMiddleware forwards
-    non-HTTP scopes directly), so they are not limited here.
-    Returns 429 Too Many Requests when the limit is exceeded.
+    The Cloudflare tunnel is the only public entry point, so the header is
+    trusted; uvicorn runs without ``--proxy-headers``.
+    """
+    cf_ip = Headers(scope=scope).get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip
+    client = scope.get("client")
+    return client[0] if client else "unknown"
+
+
+class RateLimitMiddleware:
+    """Resolve the client IP and apply a sliding-window limit to ``/api/*``.
+
+    The IP is stored as ``scope["state"]["real_ip"]`` (``request.state.real_ip``)
+    for every HTTP request; only paths under ``/api/`` are counted, so static
+    assets pass through. Non-HTTP scopes (WebSocket, lifespan) pass through
+    untouched. Returns 429 Too Many Requests when the limit is exceeded.
     """
 
     def __init__(self, app: ASGIApp) -> None:
-        """Initialise rate limiter with empty windows."""
-        super().__init__(app)
+        """Wrap ``app`` with empty per-IP windows."""
+        self.app = app
         # Ordered by last access so eviction drops the least recently seen key.
         self._windows: OrderedDict[str, deque[float]] = OrderedDict()
         self._request_count = 0
 
-    async def dispatch(
-        self,
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]],
-    ) -> Response:
-        """Check rate limit and reject with 429 if exceeded."""
-        if not request.url.path.startswith(LIMITED_PATH_PREFIX):
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Reject with 429 when the client's window is full, else forward."""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        ip = getattr(request.state, "real_ip", "unknown")
+        ip = client_ip(scope)
+        scope.setdefault("state", {})["real_ip"] = ip
+        if scope["path"].startswith(LIMITED_PATH_PREFIX) and not self._allow(ip):
+            response = JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests — try again later."},
+                headers={"Retry-After": str(WINDOW_SECONDS)},
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+    def _allow(self, ip: str) -> bool:
+        """Record a hit for ``ip``; ``False`` if its window is already full."""
         now = time.monotonic()
         window = self._windows.get(ip)
         if window is None:
@@ -65,19 +84,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             window.popleft()
 
         if len(window) >= RATE_LIMIT:
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Too many requests — try again later."},
-                headers={"Retry-After": str(WINDOW_SECONDS)},
-            )
+            return False
 
         window.append(now)
 
         self._request_count += 1
         if self._request_count % CLEANUP_EVERY == 0:
             self._cleanup()
-
-        return await call_next(request)
+        return True
 
     def _cleanup(self) -> None:
         now = time.monotonic()

@@ -22,21 +22,6 @@ def test_from_attributes() -> None:
     assert schema.unit == "°C"
 
 
-def test_serialize_naive_timestamp_adds_utc() -> None:
-    """A naive datetime gets UTC timezone attached during serialization."""
-    from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]
-
-    data = WeatherReadingOut(
-        id=1,
-        parameter="temperature",
-        value=22.5,
-        unit="°C",
-        timestamp=datetime(2026, 6, 23, 12, 0, 0),  # noqa: DTZ001
-    )
-    serialized = data.model_dump(mode="json")
-    assert serialized["timestamp"].endswith("+00:00")
-
-
 def test_serialize_utc_timestamp_stays_utc() -> None:
     """A UTC-aware datetime is serialised correctly with +00:00 offset."""
     from app.schemas import WeatherReadingOut  # ty: ignore[unresolved-import]

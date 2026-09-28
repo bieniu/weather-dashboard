@@ -1,5 +1,6 @@
 """Application configuration — loading environment variables."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
@@ -25,13 +26,23 @@ def _load_config_yaml() -> dict:
 _yaml_config = _load_config_yaml()
 
 
+class SensorType(StrEnum):
+    """How a sensor's MQTT payload is parsed, stored and rendered."""
+
+    NUMERIC = "numeric"
+    CONDITION = "condition"
+    TEXT = "text"
+    ALERTS = "alerts"
+    FORECAST = "forecast"
+
+
 class SensorConfig(BaseModel):
     """Configuration for a single sensor."""
 
     name: str
     icon: str = ""
     color: str | None = None
-    type: str = "numeric"
+    type: SensorType = SensorType.NUMERIC
     round: int = 1
     unit: str = ""
     history_hours: int = Field(
@@ -68,13 +79,11 @@ class Settings(BaseSettings):
         """Accept ``info``/``Debug`` from .env; logging level names are upper-case."""
         return value.upper() if isinstance(value, str) else value
 
-    @property
-    def alerts_key(self) -> str | None:
-        """Return the sensor key of type ``alerts``, or ``None``."""
-        for key, sensor in self.sensors.items():
-            if sensor.type == "alerts":
-                return key
-        return None
+    def key_for_type(self, sensor_type: SensorType) -> str | None:
+        """Return the key of the first sensor of ``sensor_type``, or ``None``."""
+        return next(
+            (key for key, s in self.sensors.items() if s.type == sensor_type), None
+        )
 
     @property
     def allowed_origins(self) -> list[str]:
@@ -87,12 +96,13 @@ class Settings(BaseSettings):
         lower-cased, hence ``domain.lower()``.
         """
         domain = self.domain.lower()
-        return [
+        origins = [
             f"{self.scheme}://{domain}",
             f"{self.scheme}://{domain}:{self.port}",
             f"http://localhost:{self.port}",
             f"http://127.0.0.1:{self.port}",
         ]
+        return list(dict.fromkeys(origins))  # de-duplicate (domain=localhost)
 
 
 settings = Settings()

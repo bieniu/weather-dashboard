@@ -10,12 +10,13 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NoReturn
 
 import aiomqtt
-from sqlalchemy import select
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from fastapi import WebSocket
 
-from .config import settings
+from .config import SensorType, settings
 from .database import SessionLocal
 from .models import WeatherReading
 
@@ -90,31 +91,6 @@ def _finite_float(value: str | float) -> float:
     return number
 
 
-def _parse_alert_payload(
-    payload: dict, now: datetime
-) -> tuple[str, str | None, datetime]:
-    """Validate and extract alert fields from an MQTT payload."""
-    value = str(payload["value"])[:MAX_VALUE_STR_LEN]
-    level_raw = payload.get("level")
-    if level_raw is not None:
-        level = str(level_raw)[:MAX_LEVEL_LEN]
-        if level not in VALID_ALERT_LEVELS:
-            msg = f"Invalid alert level: {level}"
-            raise ValueError(msg)
-    else:
-        level = None
-    valid_to = datetime.fromisoformat(payload["valid_to"])
-    if valid_to.tzinfo is None:
-        valid_to = valid_to.replace(tzinfo=UTC)
-    else:
-        valid_to = valid_to.astimezone(UTC)
-    max_valid = now + timedelta(hours=MAX_ALERT_VALID_HOURS)
-    if valid_to <= now or valid_to > max_valid:
-        msg = f"valid_to out of range: {valid_to}"
-        raise ValueError(msg)
-    return value, level, valid_to
-
-
 TOPIC_PARAMETER_MAP: dict[str, str] = {
     f"{settings.topic_prefix}/{sensor}": sensor for sensor in settings.sensors
 }
@@ -161,179 +137,176 @@ class WebSocketManager:
 
 manager = WebSocketManager()
 
-sun_state: dict[str, str | None] = {"value": None}
+SUN_VALUES = frozenset({"above_horizon", "below_horizon"})
+
+# A parser turns one raw MQTT payload into the row to store and the message to
+# broadcast, or raises one of PAYLOAD_ERRORS.
+type Broadcast = dict[str, object]
+type Parser = Callable[[object, str, datetime], tuple[WeatherReading, Broadcast]]
 
 
-async def _process_sun_message(message: aiomqtt.Message) -> None:
-    """Handle a sun position MQTT message, persist to DB and broadcast."""
-    now = datetime.now(UTC)
-    try:
-        payload = _parse_json_object(message.payload)
-        value = str(payload["value"])
-    except PAYLOAD_ERRORS as e:
-        logger.warning("Payload parse error on topic %s: %s", SUN_TOPIC, e)
-        return
+def _parse_numeric(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _parse_json_object(raw)
+    value = _finite_float(payload["value"])
+    unit = str(payload["unit"])[:MAX_UNIT_LEN]
+    reading = WeatherReading(parameter=parameter, value=value, unit=unit, timestamp=now)
+    return reading, {
+        "parameter": parameter,
+        "value": value,
+        "unit": unit,
+        "timestamp": now.isoformat(),
+    }
 
-    if value not in {"above_horizon", "below_horizon"}:
-        logger.warning("Invalid sun value: %r", value[:MAX_VALUE_STR_LEN])
-        return
 
-    reading = WeatherReading(parameter="sun", value_str=value, timestamp=now)
-    async with SessionLocal() as db:
-        db.add(reading)
-        await db.commit()
-
-    sun_state["value"] = value
-
-    await manager.broadcast(
-        {
-            "parameter": "sun",
-            "value": value,
-            "timestamp": now.isoformat(),
-        }
+def _parse_text(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _parse_json_object(raw)
+    value = str(payload["value"])[:MAX_VALUE_STR_LEN]
+    reading = WeatherReading(
+        parameter=parameter, value_str=value, icon="", timestamp=now
     )
+    return reading, {
+        "parameter": parameter,
+        "value": value,
+        "timestamp": now.isoformat(),
+    }
 
 
-async def _process_forecast_message(
-    message: aiomqtt.Message, topic: str, parameter: str, now: datetime
-) -> None:
-    """Handle a forecast MQTT message, persist to DB and broadcast."""
-    try:
-        payload = _load_json(message.payload)
-        if not isinstance(payload, list):
-            msg = "Forecast payload is not a list"
-            raise TypeError(msg)
-        if len(payload) > MAX_FORECAST_ITEMS:
-            logger.info(
-                "Forecast on topic %s has %d items; keeping the first %d",
-                topic,
-                len(payload),
-                MAX_FORECAST_ITEMS,
-            )
-            payload = payload[:MAX_FORECAST_ITEMS]
-        # 1e400 parses to inf without hitting parse_constant; allow_nan=False
-        # turns any non-finite float anywhere in the list into a ValueError.
-        encoded = json.dumps(payload, allow_nan=False)
-    except PAYLOAD_ERRORS as e:
-        logger.warning("Payload parse error on topic %s: %s", topic, e)
-        return
+def _parse_condition(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _parse_json_object(raw)
+    value = str(payload["value"])[:MAX_VALUE_STR_LEN]
+    icon = str(payload.get("icon", ""))[:MAX_ICON_LEN]
+    reading = WeatherReading(
+        parameter=parameter, value_str=value, icon=icon, timestamp=now
+    )
+    return reading, {
+        "parameter": parameter,
+        "value": value,
+        "timestamp": now.isoformat(),
+        "icon": icon,
+    }
 
+
+def _parse_alerts(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _parse_json_object(raw)
+    value = str(payload["value"])[:MAX_VALUE_STR_LEN]
+    level_raw = payload.get("level")
+    if level_raw is not None:
+        level = str(level_raw)[:MAX_LEVEL_LEN]
+        if level not in VALID_ALERT_LEVELS:
+            msg = f"Invalid alert level: {level}"
+            raise ValueError(msg)
+    else:
+        level = None
+    valid_to = datetime.fromisoformat(payload["valid_to"])
+    if valid_to.tzinfo is None:
+        valid_to = valid_to.replace(tzinfo=UTC)
+    else:
+        valid_to = valid_to.astimezone(UTC)
+    max_valid = now + timedelta(hours=MAX_ALERT_VALID_HOURS)
+    if valid_to <= now or valid_to > max_valid:
+        msg = f"valid_to out of range: {valid_to}"
+        raise ValueError(msg)
     reading = WeatherReading(
         parameter=parameter,
-        value_str=encoded,
+        value_str=value,
+        level=level,
+        valid_to=valid_to,
         timestamp=now,
     )
+    return reading, {
+        "parameter": parameter,
+        "value": value,
+        "valid_to": valid_to.isoformat(),
+        "level": level,
+        "timestamp": now.isoformat(),
+    }
+
+
+def _parse_forecast(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _load_json(raw)
+    if not isinstance(payload, list):
+        msg = "Forecast payload is not a list"
+        raise TypeError(msg)
+    if len(payload) > MAX_FORECAST_ITEMS:
+        logger.info(
+            "Forecast %s has %d items; keeping the first %d",
+            parameter,
+            len(payload),
+            MAX_FORECAST_ITEMS,
+        )
+        payload = payload[:MAX_FORECAST_ITEMS]
+    # 1e400 parses to inf without hitting parse_constant; allow_nan=False
+    # turns any non-finite float anywhere in the list into a ValueError.
+    encoded = json.dumps(payload, allow_nan=False)
+    reading = WeatherReading(parameter=parameter, value_str=encoded, timestamp=now)
+    return reading, {
+        "parameter": parameter,
+        "value": payload,
+        "timestamp": now.isoformat(),
+    }
+
+
+def _parse_sun(
+    raw: object, parameter: str, now: datetime
+) -> tuple[WeatherReading, Broadcast]:
+    payload = _parse_json_object(raw)
+    value = str(payload["value"])
+    if value not in SUN_VALUES:
+        msg = f"Invalid sun value: {value[:MAX_VALUE_STR_LEN]!r}"
+        raise ValueError(msg)
+    reading = WeatherReading(parameter=parameter, value_str=value, timestamp=now)
+    return reading, {
+        "parameter": parameter,
+        "value": value,
+        "timestamp": now.isoformat(),
+    }
+
+
+PARSERS: dict[SensorType, Parser] = {
+    SensorType.NUMERIC: _parse_numeric,
+    SensorType.CONDITION: _parse_condition,
+    SensorType.TEXT: _parse_text,
+    SensorType.ALERTS: _parse_alerts,
+    SensorType.FORECAST: _parse_forecast,
+}
+
+
+async def _persist_and_broadcast(reading: WeatherReading, data: Broadcast) -> None:
     async with SessionLocal() as db:
         db.add(reading)
         await db.commit()
-
-    await manager.broadcast(
-        {
-            "parameter": parameter,
-            "value": payload,
-            "timestamp": now.isoformat(),
-        }
-    )
-
-
-async def _load_sun_state() -> None:
-    """Load the latest sun state from the database on startup."""
-    async with SessionLocal() as db:
-        result = await db.execute(
-            select(WeatherReading.value_str)
-            .where(WeatherReading.parameter == "sun")
-            .order_by(WeatherReading.timestamp.desc())
-            .limit(1)
-        )
-        row = result.scalar_one_or_none()
-        if row:
-            sun_state["value"] = row
-            logger.info("Sun state loaded from DB: %s", row)
+    await manager.broadcast(data)
 
 
 async def _process_mqtt_message(message: aiomqtt.Message) -> None:
     """Parse, persist and broadcast a single MQTT message."""
     topic = str(message.topic)
+    if topic == SUN_TOPIC:
+        parameter, parser = "sun", _parse_sun
+    else:
+        parameter = TOPIC_PARAMETER_MAP.get(topic)
+        if parameter is None:
+            return  # unknown topic — ignore
+        parser = PARSERS[settings.sensors[parameter].type]
 
     now = datetime.now(UTC)
-
-    if topic == SUN_TOPIC:
-        await _process_sun_message(message)
-        return
-
-    parameter = TOPIC_PARAMETER_MAP.get(topic)
-    if parameter is None:
-        return  # unknown topic — ignore
-
-    sensor_type = settings.sensors[parameter].type
-
-    if sensor_type == "forecast":
-        await _process_forecast_message(message, topic, parameter, now)
-        return
-
     try:
-        payload = _parse_json_object(message.payload)
-        if sensor_type == "alerts":
-            value_str, level, valid_to = _parse_alert_payload(payload, now)
-            reading = WeatherReading(
-                parameter=parameter,
-                value_str=value_str,
-                level=level,
-                valid_to=valid_to,
-                timestamp=now,
-            )
-        elif sensor_type in {"condition", "text"}:
-            value_str = str(payload["value"])[:MAX_VALUE_STR_LEN]
-            icon = (
-                str(payload.get("icon", ""))[:MAX_ICON_LEN]
-                if sensor_type == "condition"
-                else ""
-            )
-            reading = WeatherReading(
-                parameter=parameter, value_str=value_str, icon=icon, timestamp=now
-            )
-        else:
-            value = _finite_float(payload["value"])
-            unit = str(payload["unit"])[:MAX_UNIT_LEN]
-            reading = WeatherReading(
-                parameter=parameter, value=value, unit=unit, timestamp=now
-            )
+        reading, data = parser(message.payload, parameter, now)
     except PAYLOAD_ERRORS as e:
         logger.warning("Payload parse error on topic %s: %s", topic, e)
         return
 
-    async with SessionLocal() as db:
-        db.add(reading)
-        await db.commit()
-
-    if sensor_type == "alerts":
-        await manager.broadcast(
-            {
-                "parameter": parameter,
-                "value": value_str,
-                "valid_to": valid_to.isoformat(),
-                "level": level,
-                "timestamp": now.isoformat(),
-            }
-        )
-    elif sensor_type in {"condition", "text"}:
-        data: dict[str, object] = {
-            "parameter": parameter,
-            "value": value_str,
-            "timestamp": now.isoformat(),
-        }
-        if sensor_type == "condition":
-            data["icon"] = icon
-        await manager.broadcast(data)
-    else:
-        await manager.broadcast(
-            {
-                "parameter": parameter,
-                "value": value,
-                "unit": unit,
-                "timestamp": now.isoformat(),
-            }
-        )
+    await _persist_and_broadcast(reading, data)
 
 
 def _reconnect_delay(attempt: int) -> float:

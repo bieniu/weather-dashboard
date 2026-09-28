@@ -74,7 +74,7 @@ jobs:
         run: npm run vendor:check
 
       - name: Lint JavaScript
-        run: npx eslint frontend/
+        run: npx eslint frontend/ tests/frontend scripts/
 
       - name: Lint CSS
         run: npx stylelint "frontend/**/*.css"

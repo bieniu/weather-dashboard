@@ -70,15 +70,25 @@ async def async_client(
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def patched_session(monkeypatch, db_engine) -> async_sessionmaker[AsyncSession]:
+    """Point the MQTT ingest and the cleanup task at the test database."""
+    session_factory = async_sessionmaker(
+        db_engine, expire_on_commit=False, class_=AsyncSession
+    )
+    monkeypatch.setattr("app.mqtt_client.SessionLocal", session_factory)
+    monkeypatch.setattr("app.main.SessionLocal", session_factory)
+    return session_factory
+
+
 @pytest.fixture(autouse=True)
 def _reset_ws_manager() -> None:
-    """Clear WebSocket connections and sun state before each test."""
-    from app.mqtt_client import manager, sun_state  # ty: ignore[unresolved-import]
+    """Clear WebSocket connections and per-IP WebSocket counts before each test."""
+    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
     from app.routers import weather  # ty: ignore[unresolved-import]
 
     manager.active_connections.clear()
     weather._open_ws_by_ip.clear()
-    sun_state["value"] = None
 
 
 @pytest.fixture(autouse=True)

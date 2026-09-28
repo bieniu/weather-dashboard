@@ -1,53 +1,51 @@
-process.env.TZ = "UTC";
-
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  getConditionSvgPath,
-  getPolishDayAbbr,
-  formatTimestamp,
-  formatUpdated,
-  resolveIcon,
-  createCard,
-  createChart,
-  updateChartTheme,
-  updateCard,
-  appendChartPoint,
-  loadHistory,
-  loadForecast,
-  connectWebSocket,
-  initThemeToggle,
-  THEME_STORAGE_KEY,
-  loadSensors,
-  initAnalytics,
-  init,
-  registerServiceWorker,
-  charts,
-  sensorsConfig,
-  sunState,
-  alerts,
-  ALERT_ICONS,
-  ALERT_GREEN_ICON,
-  showAlertCard,
-  hideAlertCard,
-  updateAlertVisibility,
-  handleAlertUpdate,
-  sendAlertNotification,
-  requestNotificationPermission,
-  loadAlerts,
-  loadSunState,
   API_BASE,
   HISTORY_HOURS,
+  getJson,
+  loadSensors,
+  sensorsConfig,
+} from "../../frontend/api.js";
+import {
+  ALERT_GREEN_ICON,
+  ALERT_ICONS,
+  alerts,
+  handleAlertUpdate,
+  hideAlertCard,
+  loadAlerts,
+  requestNotificationPermission,
+  scheduleAlertCheck,
+  sendAlertNotification,
+  showAlertCard,
+  updateAlertVisibility,
+} from "../../frontend/alerts.js";
+import { init, initAnalytics, registerServiceWorker, resetState } from "../../frontend/app.js";
+import {
+  createCard,
+  isChartSensor,
   loadCurrent,
-  reconnectNow,
-  wsState,
-  trimChartData,
+  loadForecast,
+  loadSunState,
+  updateCard,
+} from "../../frontend/cards.js";
+import {
+  appendChartPoint,
+  buildChartOptions,
   chartPoints,
-} from "../../frontend/app.js";
+  charts,
+  createChart,
+  loadHistory,
+  trimChartData,
+  updateChartTheme,
+  withAlpha,
+} from "../../frontend/charts.js";
+import { esc, formatTimestamp, formatUpdated, getPolishDayAbbr } from "../../frontend/format.js";
+import { getConditionSvgPath, resolveIcon, sunState } from "../../frontend/icons.js";
+import { THEME_STORAGE_KEY, initThemeToggle } from "../../frontend/theme.js";
+import { connectWebSocket, reconnectNow, wsState } from "../../frontend/ws.js";
 
 beforeEach(() => {
-  Object.keys(charts).forEach((k) => delete charts[k]);
-  Object.keys(sensorsConfig).forEach((k) => delete sensorsConfig[k]);
-  sunState.value = null;
+  resetState();
 });
 
 const SENSOR_NUMERIC = {
@@ -92,50 +90,49 @@ describe("utils", () => {
     expect(getConditionSvgPath("mdi:weather-sunny")).toBe("weather_icons/sunny.svg");
   });
 
-  it("getConditionSvgPath resolves partlycloudy to day variant (6-20h)", () => {
+  it.each([
+    [null, "2025-06-24T12:00:00", "partly-cloudy-day"],
+    [null, "2025-06-24T22:00:00", "partly-cloudy-night"],
+    [null, "2025-06-24T06:00:00", "partly-cloudy-day"],
+    [null, "2025-06-24T20:00:00", "partly-cloudy-night"],
+    ["above_horizon", "2025-06-24T22:00:00", "partly-cloudy-day"],
+    ["below_horizon", "2025-06-24T12:00:00", "partly-cloudy-night"],
+  ])("getConditionSvgPath picks partly cloudy by sun state %s at %s", (sun, now, icon) => {
+    sunState.value = sun;
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-24T12:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
-      "weather_icons/partly-cloudy-day.svg",
-    );
+    vi.setSystemTime(new Date(now));
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(`weather_icons/${icon}.svg`);
     vi.useRealTimers();
   });
 
-  it("getConditionSvgPath resolves partlycloudy to night variant (20-6h)", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-24T22:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
+  it("getConditionSvgPath uses the reading's timestamp when there is no sun state", () => {
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy", "2025-06-24T23:00:00Z")).toBe(
       "weather_icons/partly-cloudy-night.svg",
     );
-    vi.useRealTimers();
-  });
-
-  it("getConditionSvgPath uses sunState above_horizon over time", () => {
-    sunState.value = "above_horizon";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-24T22:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
-      "weather_icons/partly-cloudy-day.svg",
-    );
-    vi.useRealTimers();
-  });
-
-  it("getConditionSvgPath uses sunState below_horizon over time", () => {
-    sunState.value = "below_horizon";
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-24T12:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
-      "weather_icons/partly-cloudy-night.svg",
-    );
-    vi.useRealTimers();
   });
 
   it("getConditionSvgPath returns null for unknown icon", () => {
     expect(getConditionSvgPath("mdi:unknown-icon")).toBeNull();
   });
 
-  it("getConditionSvgPath returns null for missing SVG mapping", () => {
+  it("getConditionSvgPath resolves a bare mdi alias (clear-night) to its SVG", () => {
     expect(getConditionSvgPath("mdi:clear-night")).toBe("weather_icons/clear-night.svg");
+  });
+
+  it("esc escapes every HTML-special character", () => {
+    expect(esc(`<b a="1" b='2'>&</b>`)).toBe(
+      "&lt;b a=&quot;1&quot; b=&#39;2&#39;&gt;&amp;&lt;/b&gt;",
+    );
+    expect(esc(24)).toBe("24");
+  });
+
+  it("getJson prefixes API_BASE and throws on HTTP errors", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(1) }));
+    await expect(getJson("/x")).resolves.toBe(1);
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/x`);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    await expect(getJson("/x")).rejects.toThrow("HTTP 404");
   });
 });
 
@@ -181,6 +178,37 @@ describe("createCard", () => {
     expect(card.querySelector(".weather-card__value--condition")).toBeTruthy();
   });
 
+  it.each([
+    ["numeric", "numeric"],
+    ["condition", "condition"],
+    ["text", "text"],
+    ["alerts", "alerts"],
+    ["forecast", "forecast"],
+    ["pm", "numeric"],
+    [undefined, "numeric"],
+  ])("sensor type %s gets the weather-card--%s class", (type, cardClass) => {
+    const card = createCard("x", { name: "X", type, icon: "mdi:air" }, 0);
+    expect(card.classList.contains(`weather-card--${cardClass}`)).toBe(true);
+    expect(isChartSensor({ type })).toBe(cardClass === "numeric");
+  });
+
+  it("never interpolates config strings as HTML", () => {
+    const sensor = {
+      name: '<img src=x onerror="alert(1)">',
+      type: "numeric",
+      icon: "mdi:<b>air</b>",
+      unit: "°C",
+    };
+    const card = createCard("temperature", sensor, 0);
+    expect(card.querySelector("img")).toBeNull();
+    expect(card.querySelector("b")).toBeNull();
+    expect(card.querySelector(".weather-card__label").textContent).toBe(sensor.name);
+    expect(card.querySelector(".weather-card__icon").textContent).toBe("<b>air</b>");
+    expect(card.querySelector("canvas").getAttribute("aria-label")).toBe(
+      `${sensor.name} — wykres z ostatnich ${HISTORY_HOURS} godzin`,
+    );
+  });
+
   it("numeric sensor does not have condition header", () => {
     const card = createCard("temperature", SENSOR_NUMERIC.temperature, 0);
     expect(card.querySelector(".weather-card__header--condition")).toBeNull();
@@ -195,11 +223,6 @@ describe("updateCard", () => {
       update: vi.fn(),
     };
     sensorsConfig.temperature = SENSOR_NUMERIC.temperature;
-  });
-
-  afterEach(() => {
-    delete charts.temperature;
-    delete sensorsConfig.temperature;
   });
 
   it("updates numeric sensor value with correct decimals", () => {
@@ -222,7 +245,6 @@ describe("updateCard", () => {
     expect(img.src).toContain("weather_icons/sunny.svg");
     expect(img.alt).toBe("Słonecznie");
     expect(img.classList.contains("weather-card__icon--hidden")).toBe(false);
-    delete sensorsConfig.condition;
   });
 
   it("updates text sensor value", () => {
@@ -232,7 +254,6 @@ describe("updateCard", () => {
 
     updateCard("text_sensor", "Silny wiatr", null, "2025-06-24T14:30:00Z");
     expect(document.getElementById("text_sensor-value").textContent).toBe("Silny wiatr");
-    delete sensorsConfig.text_sensor;
   });
 
   it("hides icon-img and shows fallback when condition value is falsy", () => {
@@ -247,11 +268,12 @@ describe("updateCard", () => {
     updateCard("condition", null, null, "2025-06-24T14:30:00Z", "mdi:weather-sunny");
     expect(img.classList.contains("weather-card__icon--hidden")).toBe(true);
     expect(fallback.classList.contains("weather-card__icon--hidden")).toBe(false);
-    delete sensorsConfig.condition;
   });
 
   it("does nothing when sensor not in config", () => {
-    updateCard("nonexistent", 42, null, "2025-06-24T14:30:00Z");
+    const before = document.getElementById("weather-grid").innerHTML;
+    expect(() => updateCard("nonexistent", 42, null, "2025-06-24T14:30:00Z")).not.toThrow();
+    expect(document.getElementById("weather-grid").innerHTML).toBe(before);
   });
 
   it("updates updated timestamp on numeric sensor", () => {
@@ -266,15 +288,13 @@ describe("updateCard", () => {
 });
 
 describe("chart", () => {
-  beforeEach(() => {
-    delete chartPoints.temperature; // mocks replace charts.temperature per test
-  });
+  beforeEach(() => {});
 
   it("createChart creates a Chart.js instance", () => {
     const card = createCard("temperature", SENSOR_NUMERIC.temperature, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    const chart = createChart("chart-temperature", "temperature", "#E53935", 1, "°C");
+    const chart = createChart("chart-temperature", "#E53935", 1, "°C");
     expect(chart).toBeTruthy();
     expect(chart.update).toBeTypeOf("function");
   });
@@ -301,7 +321,6 @@ describe("chart", () => {
       ],
     };
     charts.temperature = { data: { datasets: [ds] }, update: vi.fn() };
-    delete sensorsConfig.temperature; // default window: HISTORY_HOURS
 
     appendChartPoint("temperature", 3, new Date(t0 + (HISTORY_HOURS + 1) * hour).toISOString());
 
@@ -331,7 +350,6 @@ describe("chart", () => {
     expect(source.map((p) => p.y)).toEqual([1, 2]);
     expect(ds._data).toBe(source);
     expect(ds._decimated).toHaveLength(1); // the view is left to the plugin
-    delete chartPoints.temperature;
   });
 
   it("trimChartData honours the sensor's own history_hours", () => {
@@ -346,14 +364,13 @@ describe("chart", () => {
     trimChartData("water_level", data);
 
     expect(data.map((p) => p.y)).toEqual([2, 3]);
-    delete sensorsConfig.water_level;
   });
 
   it("createChart disables parsing and enables LTTB decimation", () => {
     const card = createCard("temperature", SENSOR_NUMERIC.temperature, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    createChart("chart-temperature", "temperature", "#E53935", 1, "°C");
+    createChart("chart-temperature", "#E53935", 1, "°C");
 
     const config = Chart.mock.calls.at(-1)[1];
     expect(config.options.parsing).toBe(false);
@@ -366,7 +383,55 @@ describe("chart", () => {
   });
 
   it("appendChartPoint does nothing for unknown parameter", () => {
+    charts.temperature = { data: { datasets: [{ data: [] }] }, update: vi.fn() };
+
     appendChartPoint("nonexistent", 42, "2025-06-24T15:00:00Z");
+
+    expect(chartPoints).toEqual({});
+    expect(charts.temperature.update).not.toHaveBeenCalled();
+  });
+
+  it("createChart themes both axes from the CSS tokens and fills with the sensor colour", () => {
+    document
+      .getElementById("weather-grid")
+      .appendChild(createCard("temperature", SENSOR_NUMERIC.temperature, 0));
+
+    createChart("chart-temperature", "#E53935", 1, "°C");
+
+    const config = Chart.mock.calls.at(-1)[1];
+    const { x, y } = config.options.scales;
+    expect([x.grid.color, y.grid.color, x.ticks.color, y.ticks.color]).toEqual([
+      "#ccc",
+      "#ccc",
+      "#666",
+      "#666",
+    ]);
+    expect(config.data.datasets[0]).toMatchObject({
+      borderColor: "#E53935",
+      backgroundColor: "#E5393522",
+    });
+  });
+
+  it.each([
+    ["#E53935", "#E5393522"],
+    ["#abc", "#aabbcc22"],
+    ["rgb(1, 2, 3)", "transparent"],
+    ["#12345", "transparent"],
+    [undefined, "transparent"],
+  ])("withAlpha(%s) is %s", (color, expected) => {
+    expect(withAlpha(color)).toBe(expected);
+  });
+
+  it("buildChartOptions formats tooltips and ticks with the sensor's decimals and unit", () => {
+    const options = buildChartOptions(2, "hPa");
+    const { label, title } = options.plugins.tooltip.callbacks;
+
+    expect(label({ parsed: { y: 1013.256 } })).toBe(" 1013.26 hPa");
+    expect(title([{ raw: { x: Date.parse("2025-06-24T14:30:00Z") } }])).toBe("14:30");
+    expect(options.scales.y.ticks.callback("7")).toBe("7.00");
+    const scale = { width: 0 };
+    options.scales.y.afterFit(scale);
+    expect(scale.width).toBe(52);
   });
 
   it("updateChartTheme calls update on all charts", () => {
@@ -389,7 +454,6 @@ describe("chart", () => {
 
 describe("loadHistory", () => {
   beforeEach(() => {
-    delete chartPoints.temperature;
     charts.temperature = {
       data: { datasets: [{ data: [] }] },
       update: vi.fn(),
@@ -407,15 +471,16 @@ describe("loadHistory", () => {
       { timestamp: "2025-06-24T13:00:00Z", value: 22.0, unit: "°C" },
       { timestamp: "2025-06-24T14:00:00Z", value: 23.0, unit: "°C" },
     ];
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(history),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(history),
+      }),
+    );
 
     await loadHistory("temperature");
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      `${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`,
-    );
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`);
     expect(charts.temperature.data.datasets[0].data).toHaveLength(2);
   });
 
@@ -428,9 +493,10 @@ describe("loadHistory", () => {
       { x: Date.parse("2025-06-24T13:30:00Z"), y: 99 }, // covered by history: dropped
       { x: Date.parse("2025-06-24T14:05:00Z"), y: 24.0 }, // newer than history: kept
     ];
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: () => Promise.resolve(history) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(history) }),
+    );
 
     await loadHistory("temperature");
 
@@ -452,38 +518,40 @@ describe("loadHistory", () => {
     charts.temperature = { data: { datasets: [ds] }, update: vi.fn() };
     chartPoints.temperature = source;
     const history = [{ timestamp: "2025-06-24T14:00:00Z", value: 23.0, unit: "°C" }];
-    globalThis.fetch = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: () => Promise.resolve(history) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(history) }),
+    );
 
     await loadHistory("temperature");
 
     expect(ds._data.map((p) => p.y)).toEqual([23.0, 24.0]);
     expect(chartPoints.temperature).toBe(ds._data);
-    delete chartPoints.temperature;
   });
 
   it("does nothing for sensors without a chart", async () => {
-    globalThis.fetch = vi.fn();
-    delete charts.temperature;
+    vi.stubGlobal("fetch", vi.fn());
 
-    await loadHistory("temperature");
+    await loadHistory("pressure");
 
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("logs error on HTTP failure", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await loadHistory("temperature");
     expect(console.error).toHaveBeenCalled();
   });
 
   it("handles empty history gracefully", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      }),
+    );
 
     await loadHistory("temperature");
     expect(charts.temperature.data.datasets[0].data).toHaveLength(0);
@@ -503,15 +571,16 @@ describe("loadHistory", () => {
       data: { datasets: [{ data: [] }] },
       update: vi.fn(),
     };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      }),
+    );
 
     await loadHistory("water_level");
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/history/water_level?hours=48`);
-    delete charts.water_level;
-    delete sensorsConfig.water_level;
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/history/water_level?hours=48`);
   });
 });
 
@@ -520,38 +589,42 @@ describe("connectWebSocket", () => {
   const latest = () => sockets[sockets.length - 1];
 
   beforeEach(() => {
-    globalThis.location = { host: "localhost:8332", protocol: "http:" };
     sockets = [];
-    globalThis.WebSocket = vi.fn(function () {
-      const socket = {
-        readyState: 0,
-        onopen: null,
-        onmessage: null,
-        onclose: null,
-        onerror: null,
-        close: vi.fn(),
-      };
-      sockets.push(socket);
-      return socket;
-    });
-    Object.assign(wsState, {
-      socket: null,
-      reconnectTimer: null,
-      reconnectAttempt: 0,
-      attempted: false,
-    });
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        const socket = {
+          readyState: 0,
+          onopen: null,
+          onmessage: null,
+          onclose: null,
+          onerror: null,
+          close: vi.fn(),
+        };
+        sockets.push(socket);
+        return socket;
+      }),
+    );
+    // Every reconnect backfills over REST.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
+    );
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    resetState(); // clears the reconnect timer while it is still a fake one
     vi.useRealTimers();
-    delete globalThis.WebSocket;
-    Object.assign(wsState, {
-      socket: null,
-      reconnectTimer: null,
-      reconnectAttempt: 0,
-      attempted: false,
-    });
+  });
+
+  it.each([
+    ["http:", "ws://example.org:8332/api/weather/ws"],
+    ["https:", "wss://example.org:8332/api/weather/ws"],
+  ])("connects over the page's scheme (%s)", (protocol, url) => {
+    vi.stubGlobal("location", { protocol, host: "example.org:8332" });
+    connectWebSocket();
+    expect(WebSocket).toHaveBeenCalledWith(url);
   });
 
   it("updates status to connected on open", () => {
@@ -599,21 +672,23 @@ describe("connectWebSocket", () => {
   });
 
   it("backfills cards, charts, alerts and forecast after a reconnect, not on the first connection", async () => {
-    delete chartPoints.temperature;
     charts.temperature = { data: { datasets: [{ data: [] }] }, update: vi.fn() };
     sensorsConfig.temperature = SENSOR_NUMERIC.temperature;
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) }),
+    );
 
     connectWebSocket();
     latest().onopen();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
 
     latest().onclose();
     vi.advanceTimersByTime(6000);
     latest().onopen();
-    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
 
-    const urls = globalThis.fetch.mock.calls.map((c) => c[0]);
+    const urls = fetch.mock.calls.map((c) => c[0]);
     expect(urls).toEqual(
       expect.arrayContaining([
         `${API_BASE}/current`,
@@ -622,19 +697,21 @@ describe("connectWebSocket", () => {
         `${API_BASE}/forecast`,
       ]),
     );
-    delete charts.temperature;
   });
 
   it("backfills on the first successful open when the initial attempt failed (server was down)", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     connectWebSocket();
     latest().onclose(); // never opened
     vi.advanceTimersByTime(6000);
     latest().onopen();
 
-    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    expect(globalThis.fetch.mock.calls.map((c) => c[0])).toContain(`${API_BASE}/current`);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(fetch.mock.calls.map((c) => c[0])).toContain(`${API_BASE}/current`);
   });
 
   it("ignores close events from a socket that was already replaced", () => {
@@ -696,12 +773,15 @@ describe("initThemeToggle", () => {
 
   it("follows OS theme changes only while there is no stored choice", () => {
     const listeners = {};
-    window.matchMedia = vi.fn(() => ({
-      matches: false,
-      addEventListener: (type, fn) => {
-        listeners[type] = fn;
-      },
-    }));
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        matches: false,
+        addEventListener: (type, fn) => {
+          listeners[type] = fn;
+        },
+      })),
+    );
     initThemeToggle();
 
     listeners.change({ matches: true });
@@ -718,6 +798,23 @@ describe("initThemeToggle", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 
+  it("falls back to the OS preference when storage is blocked", () => {
+    const blocked = vi.fn(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked });
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({ matches: true })),
+    );
+
+    initThemeToggle();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    document.getElementById("theme-toggle").click();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(blocked).toHaveBeenCalledTimes(2); // one read, one write, both swallowed
+  });
+
   it("toggles theme on button click", () => {
     initThemeToggle();
     const btn = document.getElementById("theme-toggle");
@@ -731,19 +828,22 @@ describe("initThemeToggle", () => {
 describe("loadSensors", () => {
   it("fetches sensors from API", async () => {
     const data = { temperature: { name: "Temperatura", type: "numeric" } };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(data),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(data),
+      }),
+    );
 
     const result = await loadSensors();
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/sensors`);
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/sensors`);
     expect(result).toEqual(data);
   });
 
   it("throws on HTTP error", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
-    await expect(loadSensors()).rejects.toThrow("Failed to load sensors: HTTP 500");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    await expect(loadSensors()).rejects.toThrow("HTTP 500");
   });
 });
 
@@ -760,10 +860,13 @@ describe("initAnalytics", () => {
   });
 
   it("injects script tag when host and id are returned", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ host: "https://umami.example.com", id: "abc-123" }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ host: "https://umami.example.com", id: "abc-123" }),
+      }),
+    );
 
     await initAnalytics();
     const scripts = document.head.querySelectorAll("script");
@@ -775,10 +878,13 @@ describe("initAnalytics", () => {
   });
 
   it("normalizes trailing slash in host", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ host: "https://umami.example.com/", id: "abc-123" }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ host: "https://umami.example.com/", id: "abc-123" }),
+      }),
+    );
 
     await initAnalytics();
     const scripts = document.head.querySelectorAll("script");
@@ -787,27 +893,16 @@ describe("initAnalytics", () => {
     expect(injected.src).toBe("https://umami.example.com/script.js");
   });
 
-  it("does nothing when response has no host/id", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
-    const originalLength = document.head.querySelectorAll("script").length;
-
-    await initAnalytics();
-    expect(document.head.querySelectorAll("script")).toHaveLength(originalLength);
-  });
-
-  it("does nothing on HTTP error", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
-    const originalLength = document.head.querySelectorAll("script").length;
-
-    await initAnalytics();
-    expect(document.head.querySelectorAll("script")).toHaveLength(originalLength);
-  });
-
-  it("does nothing on fetch error", async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network error"));
+  it.each([
+    ["no host/id", async () => ({ ok: true, json: async () => ({}) })],
+    [
+      "no id",
+      async () => ({ ok: true, json: async () => ({ host: "https://umami.example.com" }) }),
+    ],
+    ["HTTP error", async () => ({ ok: false, status: 404 })],
+    ["network error", async () => Promise.reject(new Error("network error"))],
+  ])("injects nothing on %s", async (_case, fetchImpl) => {
+    vi.stubGlobal("fetch", vi.fn(fetchImpl));
     const originalLength = document.head.querySelectorAll("script").length;
 
     await initAnalytics();
@@ -816,10 +911,6 @@ describe("initAnalytics", () => {
 });
 
 describe("alert", () => {
-  beforeEach(() => {
-    alerts.length = 0;
-  });
-
   it("ALERT_ICONS maps levels to correct paths", () => {
     expect(ALERT_ICONS.yellow).toBe("weather_icons/alert-yellow.svg");
     expect(ALERT_ICONS.orange).toBe("weather_icons/alert-orange.svg");
@@ -838,48 +929,24 @@ describe("alert", () => {
     expect(card.querySelector(".weather-card__header--condition")).toBeTruthy();
   });
 
-  it("showAlertCard displays card with correct icon and value", () => {
-    const sensor = { name: "Alerty", type: "alerts" };
-    const card = createCard("alerts", sensor, 0);
+  it.each([
+    ["yellow", "alert-yellow.svg", "yellow"],
+    ["orange", "alert-orange.svg", "orange"],
+    ["red", "alert-red.svg", "red"],
+    ["unknown", "alert-yellow.svg", "unknown"],
+    [null, "alert-green.svg", "green"],
+  ])("showAlertCard shows level %s with %s", (level, icon, alt) => {
+    const card = createCard("alerts", { name: "Alerty", type: "alerts" }, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    showAlertCard({
-      value: "burze",
-      level: "yellow",
-      valid_to: "2026-07-18T19:00:00Z",
-      updatedText: "Test",
-    });
+    showAlertCard({ value: "burze", level, valid_to: "2026-07-18T19:00:00Z", updatedText: "Test" });
+
     expect(card.style.display).toBe("");
     const img = document.getElementById("alerts-icon-img");
-    expect(img.src).toContain("alert-yellow.svg");
+    expect(img.src).toContain(icon);
+    expect(img.alt).toBe(alt);
     expect(document.getElementById("alerts-value").textContent).toBe("burze");
-  });
-
-  it("showAlertCard falls back to yellow for unknown level", () => {
-    const sensor = { name: "Alerty", type: "alerts" };
-    const card = createCard("alerts", sensor, 0);
-    document.getElementById("weather-grid").appendChild(card);
-
-    showAlertCard({ value: "test", level: "unknown", valid_to: "2026-07-18T19:00:00Z" });
-    const img = document.getElementById("alerts-icon-img");
-    expect(img.src).toContain("alert-yellow.svg");
-  });
-
-  it("showAlertCard uses green icon for null level", () => {
-    const sensor = { name: "Alerty", type: "alerts" };
-    const card = createCard("alerts", sensor, 0);
-    document.getElementById("weather-grid").appendChild(card);
-
-    showAlertCard({
-      value: "brak zagrożeń",
-      level: null,
-      valid_to: "2026-07-18T19:00:00Z",
-      updatedText: "Test",
-    });
-    expect(card.style.display).toBe("");
-    const img = document.getElementById("alerts-icon-img");
-    expect(img.src).toContain("alert-green.svg");
-    expect(document.getElementById("alerts-value").textContent).toBe("brak zagrożeń");
+    expect(document.getElementById("alerts-updated").textContent).toBe("Test");
   });
 
   it("hideAlertCard hides the card", () => {
@@ -890,6 +957,40 @@ describe("alert", () => {
 
     hideAlertCard();
     expect(card.style.display).toBe("none");
+  });
+
+  it("scheduleAlertCheck hides an alert once it expires, with a single timer", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-23T12:00:00Z"));
+    const card = createCard("alerts", { name: "Alerty", type: "alerts" }, 0);
+    document.getElementById("weather-grid").appendChild(card);
+    handleAlertUpdate({
+      value: "burze",
+      level: "red",
+      valid_to: "2026-06-23T12:00:45Z",
+      timestamp: "a",
+    });
+    expect(card.style.display).toBe("");
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+
+    scheduleAlertCheck();
+    scheduleAlertCheck();
+    vi.advanceTimersByTime(30000);
+    expect(card.style.display).toBe("");
+    vi.advanceTimersByTime(30000);
+
+    expect(card.style.display).toBe("none");
+    expect(alerts).toHaveLength(0);
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+    setIntervalSpy.mockRestore();
+    resetState(); // clears the interval while it is still a fake timer
+    vi.useRealTimers();
+  });
+
+  it("updateAlertVisibility drops alerts without a valid expiry", () => {
+    alerts.push({ value: "undated", level: "red", valid_to: "not a date" });
+    updateAlertVisibility();
+    expect(alerts).toHaveLength(0);
   });
 
   it("updateAlertVisibility shows first valid alert", () => {
@@ -967,25 +1068,19 @@ describe("alert", () => {
   });
 
   it("sendAlertNotification does nothing when permission is denied", () => {
-    const origPerm = Notification.permission;
     Notification.permission = "denied";
-    Notification.mockClear();
     sendAlertNotification({ value: "test", level: "red", timestamp: "1" });
     expect(Notification).not.toHaveBeenCalled();
-    Notification.permission = origPerm;
   });
 
   it("sendAlertNotification does nothing when Notification API is unavailable", () => {
-    const orig = globalThis.Notification;
-    delete globalThis.Notification;
+    delete globalThis.Notification; // setup.js stubs it again for the next test
     expect(() =>
       sendAlertNotification({ value: "test", level: "red", timestamp: "1" }),
     ).not.toThrow();
-    globalThis.Notification = orig;
   });
 
   it("sendAlertNotification fires Notification with correct title and body", () => {
-    Notification.mockClear();
     sendAlertNotification({
       value: "burze",
       level: "orange",
@@ -1001,7 +1096,6 @@ describe("alert", () => {
   it("sendAlertNotification shows only time for today expiry", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-23T12:00:00Z"));
-    Notification.mockClear();
     sendAlertNotification({
       value: "mgła",
       level: "yellow",
@@ -1016,7 +1110,6 @@ describe("alert", () => {
   });
 
   it("sendAlertNotification uses Zielony label for null level", () => {
-    Notification.mockClear();
     sendAlertNotification({
       value: "brak zagrożeń",
       level: null,
@@ -1029,25 +1122,19 @@ describe("alert", () => {
     });
   });
 
-  it("requestNotificationPermission calls requestPermission when status is default", () => {
-    Notification.permission = "default";
-    Notification.requestPermission.mockClear();
+  it.each([
+    ["default", true],
+    ["granted", false],
+    ["denied", false],
+  ])("requestNotificationPermission with permission %s asks: %s", (permission, asks) => {
+    Notification.permission = permission;
     requestNotificationPermission();
-    expect(Notification.requestPermission).toHaveBeenCalled();
-  });
-
-  it("requestNotificationPermission does nothing when permission is already granted", () => {
-    Notification.permission = "granted";
-    Notification.requestPermission.mockClear();
-    requestNotificationPermission();
-    expect(Notification.requestPermission).not.toHaveBeenCalled();
+    expect(Notification.requestPermission).toHaveBeenCalledTimes(asks ? 1 : 0);
   });
 
   it("requestNotificationPermission does nothing when Notification API is unavailable", () => {
-    const orig = globalThis.Notification;
-    delete globalThis.Notification;
+    delete globalThis.Notification; // setup.js stubs it again for the next test
     expect(() => requestNotificationPermission()).not.toThrow();
-    globalThis.Notification = orig;
   });
 
   it("handleAlertUpdate sends notification for new alerts", () => {
@@ -1072,20 +1159,23 @@ describe("alert", () => {
         timestamp: "2026-06-23T12:00:00Z",
       },
     ];
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(apiData),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(apiData),
+      }),
+    );
 
     await loadAlerts();
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/alerts`);
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/alerts`);
     expect(alerts.length).toBe(1);
     expect(alerts[0].value).toBe("burze");
   });
 
   it("loadAlerts logs error on fetch failure", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await loadAlerts();
     expect(console.error).toHaveBeenCalled();
@@ -1102,11 +1192,13 @@ describe("alert", () => {
   });
 
   it("WS message with alert parameter routes to handleAlertUpdate", () => {
-    globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () {
-      return wsMock;
-    });
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        return wsMock;
+      }),
+    );
 
     const sensor = { name: "Alerty", type: "alerts" };
     const card = createCard("alerts", sensor, 0);
@@ -1125,15 +1217,16 @@ describe("alert", () => {
     expect(alerts.length).toBe(1);
     expect(alerts[0].value).toBe("ws-alert");
     expect(document.getElementById("alerts-value").textContent).toBe("ws-alert");
-    delete globalThis.WebSocket;
   });
 
   it("WS message with sun parameter updates sunState and re-renders condition icon", () => {
-    globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () {
-      return wsMock;
-    });
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        return wsMock;
+      }),
+    );
 
     sensorsConfig.condition = {
       name: "Warunki",
@@ -1165,7 +1258,6 @@ describe("alert", () => {
     });
     expect(sunState.value).toBe("below_horizon");
     expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-night.svg");
-    delete globalThis.WebSocket;
   });
 });
 
@@ -1176,45 +1268,44 @@ describe("loadSunState", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    sunState.value = null;
   });
 
-  it("fetches sun state from API and sets sunState.value", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ value: "above_horizon", timestamp: "2026-06-23T12:00:00Z" }),
-    });
+  it.each([["above_horizon"], ["below_horizon"]])(
+    "fetches sun state %s from the API into sunState",
+    async (value) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ value }) }),
+      );
 
-    await loadSunState();
-    expect(sunState.value).toBe("above_horizon");
-  });
-
-  it("handles below_horizon value", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
-    });
-
-    await loadSunState();
-    expect(sunState.value).toBe("below_horizon");
-  });
+      await loadSunState();
+      expect(fetch).toHaveBeenCalledWith(`${API_BASE}/sun`);
+      expect(sunState.value).toBe(value);
+    },
+  );
 
   it("ignores null sun state without overriding sunState", async () => {
     sunState.value = "above_horizon";
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ value: null, timestamp: null }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ value: null, timestamp: null }),
+      }),
+    );
 
     await loadSunState();
     expect(sunState.value).toBe("above_horizon");
   });
 
   it("re-renders condition icons on sun state change", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
+      }),
+    );
 
     sensorsConfig.condition = {
       name: "Warunki",
@@ -1235,18 +1326,17 @@ describe("loadSunState", () => {
     await loadSunState();
     expect(sunState.value).toBe("below_horizon");
     expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-night.svg");
-    delete sensorsConfig.condition;
   });
 
   it("logs warning on HTTP error", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await loadSunState();
     expect(console.warn).toHaveBeenCalled();
   });
 
   it("logs warning on fetch error", async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network"));
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
 
     await loadSunState();
     expect(console.warn).toHaveBeenCalled();
@@ -1255,13 +1345,12 @@ describe("loadSunState", () => {
 
 describe("registerServiceWorker", () => {
   afterEach(() => {
-    delete navigator.serviceWorker;
     vi.restoreAllMocks();
   });
 
   it("registers service-worker.js when the browser supports it", () => {
     const register = vi.fn().mockResolvedValue({});
-    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
+    vi.stubGlobal("navigator", { serviceWorker: { register } });
 
     registerServiceWorker();
 
@@ -1271,7 +1360,7 @@ describe("registerServiceWorker", () => {
   it("only warns when registration fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const register = vi.fn().mockRejectedValue(new Error("nope"));
-    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
+    vi.stubGlobal("navigator", { serviceWorker: { register } });
 
     registerServiceWorker();
     await vi.waitFor(() => expect(warn).toHaveBeenCalled());
@@ -1287,23 +1376,24 @@ describe("registerServiceWorker", () => {
 
 describe("init", () => {
   beforeEach(() => {
-    globalThis.location = { host: "localhost:8332", protocol: "http:" };
-    globalThis.WebSocket = vi.fn(function () {
-      return {
-        readyState: 0, // CONNECTING, like a real socket right after construction
-        onopen: null,
-        onmessage: null,
-        onclose: null,
-        onerror: null,
-        close: vi.fn(),
-      };
-    });
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        return {
+          readyState: 0, // CONNECTING, like a real socket right after construction
+          onopen: null,
+          onmessage: null,
+          onclose: null,
+          onerror: null,
+          close: vi.fn(),
+        };
+      }),
+    );
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    document.getElementById("weather-grid").innerHTML = "";
   });
 
   it("creates cards for all sensors", async () => {
@@ -1323,12 +1413,18 @@ describe("init", () => {
         color: "#FDD835",
       },
     };
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes("/sensors")) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: "above_horizon" }) });
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url) => {
+        if (url.includes("/sensors")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ value: "above_horizon" }),
+        });
+      }),
+    );
 
     await init();
     const grid = document.getElementById("weather-grid");
@@ -1340,39 +1436,56 @@ describe("init", () => {
   });
 
   it("reconnects the WebSocket when the tab becomes visible or the browser comes back online", async () => {
-    Object.assign(wsState, {
-      socket: null,
-      reconnectTimer: null,
-      reconnectAttempt: 0,
-      attempted: false,
-    });
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) }),
+    );
 
     await init();
-    expect(globalThis.WebSocket).toHaveBeenCalledTimes(1);
+    expect(WebSocket).toHaveBeenCalledTimes(1);
 
     wsState.socket.readyState = 3; // closed
     document.dispatchEvent(new Event("visibilitychange"));
-    expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
+    expect(WebSocket).toHaveBeenCalledTimes(2);
 
     wsState.socket.readyState = 3;
     window.dispatchEvent(new Event("online"));
-    expect(globalThis.WebSocket).toHaveBeenCalledTimes(3);
+    expect(WebSocket).toHaveBeenCalledTimes(3);
 
     wsState.socket.readyState = 1; // open: nothing to do
     window.dispatchEvent(new Event("online"));
-    expect(globalThis.WebSocket).toHaveBeenCalledTimes(3);
+    expect(WebSocket).toHaveBeenCalledTimes(3);
   });
 
   it("registers the service worker before touching the API", async () => {
     const register = vi.fn().mockResolvedValue({});
-    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
-    globalThis.fetch = vi.fn(() => Promise.reject(new TypeError("offline")));
+    vi.stubGlobal("navigator", { serviceWorker: { register } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("offline"))),
+    );
 
-    await expect(init()).rejects.toThrow();
+    await init();
 
     expect(register).toHaveBeenCalledWith("/service-worker.js", { scope: "/" });
-    delete navigator.serviceWorker;
+  });
+
+  it("shows an error in the grid and stops when the sensor config cannot be loaded", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    await init();
+
+    const grid = document.getElementById("weather-grid");
+    expect(grid.children).toHaveLength(1);
+    expect(grid.querySelector(".grid__error[role=alert]").textContent).toContain(
+      "Nie udało się wczytać konfiguracji czujników",
+    );
+    expect(console.error).toHaveBeenCalledWith(
+      "[Sensors] Error loading sensor configuration:",
+      expect.any(Error),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(WebSocket).not.toHaveBeenCalled();
   });
 
   it("sets charts for numeric sensors", async () => {
@@ -1386,12 +1499,18 @@ describe("init", () => {
         unit: "°C",
       },
     };
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes("/sensors")) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ value: "above_horizon" }) });
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url) => {
+        if (url.includes("/sensors")) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(sensors) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ value: "above_horizon" }),
+        });
+      }),
+    );
 
     await init();
     expect(charts.temperature).toBeTruthy();
@@ -1546,8 +1665,6 @@ describe("forecast", () => {
     expect(cols[4].querySelector(".forecast-col__precip-value").textContent).toBe("2 mm");
     expect(cols[4].querySelector(".forecast-col__cloud-value").textContent).toBe("60%");
     expect(cols[4].querySelector(".forecast-col__wind-value").textContent).toBe("19 km/h");
-
-    delete sensorsConfig.forecast;
   });
 
   it("updateCard shows partlycloudy day/night icons based on is_daytime", () => {
@@ -1564,8 +1681,6 @@ describe("forecast", () => {
 
     // Item 3: partlycloudy, is_daytime=false
     expect(cols[3].querySelector(".forecast-col__icon").src).toContain("partly-cloudy-night.svg");
-
-    delete sensorsConfig.forecast;
   });
 
   it("updateCard does nothing for non-array value", () => {
@@ -1579,8 +1694,6 @@ describe("forecast", () => {
     const cols = card.querySelectorAll(".forecast-col");
     expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("--");
     expect(cols[1].querySelector(".forecast-col__day").textContent).toBe("--");
-
-    delete sensorsConfig.forecast;
   });
 
   it("loadForecast fetches from API and updates card", async () => {
@@ -1588,26 +1701,30 @@ describe("forecast", () => {
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ forecast: FORECAST_DATA, timestamp: "2026-07-22T12:00:00Z" }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ forecast: FORECAST_DATA, timestamp: "2026-07-22T12:00:00Z" }),
+      }),
+    );
 
     await loadForecast();
 
     const cols = card.querySelectorAll(".forecast-col");
     expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
-
-    delete sensorsConfig.forecast;
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/forecast`);
   });
 
   it("loadForecast handles empty response gracefully", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ forecast: [], timestamp: null }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ forecast: [], timestamp: null }),
+      }),
+    );
 
     await loadForecast();
     // Should not throw
@@ -1616,7 +1733,7 @@ describe("forecast", () => {
 
   it("loadForecast handles HTTP error gracefully", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await loadForecast();
     expect(console.error).toHaveBeenCalled();
@@ -1649,8 +1766,6 @@ describe("forecast", () => {
     expect(cols[2].querySelector(".forecast-col__wind-value").textContent).toBe("--");
     expect(cols[3].querySelector(".forecast-col__day").textContent).toBe("--");
     expect(cols[4].querySelector(".forecast-col__day").textContent).toBe("--");
-
-    delete sensorsConfig.forecast;
   });
 
   it("updateCard shows -- for null forecast values instead of NaN", () => {
@@ -1676,8 +1791,6 @@ describe("forecast", () => {
     expect(cols[0].querySelector(".forecast-col__precip-value").textContent).toBe("--");
     expect(cols[0].querySelector(".forecast-col__cloud-value").textContent).toBe("--");
     expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("--");
-
-    delete sensorsConfig.forecast;
   });
 
   it("loadForecast uses server timestamp when available", async () => {
@@ -1685,18 +1798,22 @@ describe("forecast", () => {
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({ forecast: FORECAST_DATA.slice(0, 1), timestamp: "2026-07-22T14:00:00Z" }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            forecast: FORECAST_DATA.slice(0, 1),
+            timestamp: "2026-07-22T14:00:00Z",
+          }),
+      }),
+    );
 
     await loadForecast();
 
     const updated = document.getElementById("forecast-updated");
     expect(updated.textContent).toContain("14:00:00");
-
-    delete sensorsConfig.forecast;
   });
   it("loadCurrent fills numeric, condition and text cards from one request", async () => {
     sensorsConfig.condition = SENSOR_CONDITION.condition;
@@ -1705,35 +1822,35 @@ describe("forecast", () => {
     const grid = document.getElementById("weather-grid");
     grid.appendChild(createCard("condition", SENSOR_CONDITION.condition, 0));
     grid.appendChild(createCard("temperature", SENSOR_NUMERIC.temperature, 1));
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          condition: {
-            value_str: "Słonecznie",
-            icon: "mdi:weather-sunny",
-            timestamp: "2025-06-24T14:00:00Z",
-          },
-          temperature: { value: 21.55, unit: "°C", timestamp: "2025-06-24T14:00:00Z" },
-          pressure: null,
-        }),
-    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            condition: {
+              value_str: "Słonecznie",
+              icon: "mdi:weather-sunny",
+              timestamp: "2025-06-24T14:00:00Z",
+            },
+            temperature: { value: 21.55, unit: "°C", timestamp: "2025-06-24T14:00:00Z" },
+            pressure: null,
+          }),
+      }),
+    );
 
     await loadCurrent();
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/current`);
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/current`);
     expect(document.getElementById("condition-value").textContent).toBe("Słonecznie");
     expect(document.getElementById("condition-icon-img").src).toContain("sunny.svg");
     expect(document.getElementById("temperature-value").textContent).toBe("21.6");
     expect(document.getElementById("temperature-unit").textContent).toBe("°C");
-    delete sensorsConfig.condition;
-    delete sensorsConfig.temperature;
-    delete charts.temperature;
   });
 
   it("loadCurrent logs and survives an API error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
 
     await loadCurrent();
 
@@ -1743,17 +1860,19 @@ describe("forecast", () => {
 
   it("loadHistory skips forecast sensor", async () => {
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
-    // Should not throw even without fetch mock
+    vi.stubGlobal("fetch", vi.fn());
     await loadHistory("forecast");
-    delete sensorsConfig.forecast;
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("WS forecast message updates the card", () => {
-    globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () {
-      return wsMock;
-    });
+    vi.stubGlobal(
+      "WebSocket",
+      vi.fn(function () {
+        return wsMock;
+      }),
+    );
 
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);
@@ -1771,8 +1890,6 @@ describe("forecast", () => {
     const cols = card.querySelectorAll(".forecast-col");
     expect(cols[0].querySelector(".forecast-col__day").textContent).toBe("śro");
     expect(cols[1].querySelector(".forecast-col__temp-value").textContent).toBe("21°C");
-    delete globalThis.WebSocket;
-    delete sensorsConfig.forecast;
   });
 
   it("icons thermometer, water_drop, cloud and air are present in forecast columns", () => {
@@ -1789,7 +1906,6 @@ describe("forecast", () => {
       expect(icons[2].textContent).toBe("water_drop");
       expect(icons[3].textContent).toBe("cloud");
     }
-    delete sensorsConfig.forecast;
   });
 
   it("forecast card has precip, cloud and wind values rounded without decimals", () => {
@@ -1814,7 +1930,5 @@ describe("forecast", () => {
     expect(cols[3].querySelector(".forecast-col__wind-value").textContent).toBe("25 km/h");
     // Item 0: wind_speed 15.0 → "15 km/h" (no rounding needed)
     expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
-
-    delete sensorsConfig.forecast;
   });
 });
