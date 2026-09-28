@@ -37,6 +37,7 @@ repos:
       - id: eslint
         args: [--config, eslint.config.js]
         files: \.(js|mjs)$
+        exclude: ^frontend/vendor/
         additional_dependencies:
           - eslint@10.11.0
           - '@eslint/js'
@@ -63,4 +64,13 @@ repos:
           - --ignore-words-list=tekst,nd,crasher
           - --skip="./.*"
           - --quiet-level=2
+        exclude: ^frontend/vendor/
         exclude_types: [csv, json]
+  - repo: local
+    hooks:
+      - id: vendor-check
+        name: vendored frontend bundles match node_modules
+        entry: node scripts/vendor.mjs --check
+        language: system
+        pass_filenames: false
+        files: ^(frontend/vendor/|package(-lock)?\.json$|scripts/vendor\.mjs$)

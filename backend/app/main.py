@@ -105,7 +105,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
 
 def _build_csp() -> str:
-    script_src = "'self' https://cdn.jsdelivr.net"
+    script_src = "'self'"
     if settings.umami_host:
         script_src += f" {settings.umami_host}"
     return (

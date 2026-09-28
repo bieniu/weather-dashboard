@@ -7,6 +7,8 @@ Build and release helper scripts. Single-source the project version and propagat
 Bash scripts following strict idioms (`set -euo pipefail`). Each script is focused on a single automated task. Paths are resolved relative to the script location via `dirname "$0"` so they work from any working directory.
 
 ## Flow
+`vendor.mjs` copies the Chart.js and date-adapter browser bundles from `node_modules` into `frontend/vendor/` (`--check` only compares them and exits non-zero when stale).
+
 `set_version.sh` takes a version string (e.g. `1.2.3`) as the sole argument and performs four inline `sed` replacements:
 1. Update `version = "..."` in `pyproject.toml`
 2. Update `image: weather-dashboard:...` in `docker-compose.yml`
