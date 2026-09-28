@@ -211,7 +211,8 @@ node_modules/
 coverage/
 
 weather.db
-backend/weather.db
+weather.db-shm
+weather.db-wal
 
 # omc
 .omc/
