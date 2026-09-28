@@ -18,6 +18,7 @@ export default [
         setTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        clearTimeout: "readonly",
         Notification: "readonly",
         matchMedia: "readonly",
         Chart: "readonly",

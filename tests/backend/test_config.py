@@ -11,7 +11,7 @@ def test_sensor_config_defaults() -> None:
     assert config.type == "numeric"
     assert config.round == 1
     assert config.unit == ""
-    assert config.history_hours == 24
+    assert config.history_hours == 24  # DEFAULT_HISTORY_HOURS
 
 
 @pytest.mark.parametrize("history_hours", [0, -1, 721])

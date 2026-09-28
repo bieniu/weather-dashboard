@@ -13,6 +13,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 # than 30 days are deleted by ``cleanup_old_readings`` in ``main.py``, so a
 # longer window could never return more data.
 MAX_HISTORY_HOURS = 24 * 30
+# Default window for charts; the frontend's HISTORY_HOURS mirrors this value.
+DEFAULT_HISTORY_HOURS = 24
 
 
 def _load_config_yaml() -> dict:
@@ -32,7 +34,9 @@ class SensorConfig(BaseModel):
     type: str = "numeric"
     round: int = 1
     unit: str = ""
-    history_hours: int = Field(default=24, ge=1, le=MAX_HISTORY_HOURS)
+    history_hours: int = Field(
+        default=DEFAULT_HISTORY_HOURS, ge=1, le=MAX_HISTORY_HOURS
+    )
 
 
 class Settings(BaseSettings):

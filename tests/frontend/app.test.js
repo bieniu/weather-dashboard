@@ -37,7 +37,11 @@ import {
   loadSunState,
   API_BASE,
   HISTORY_HOURS,
-  MAX_CHART_POINTS,
+  loadCurrent,
+  reconnectNow,
+  wsState,
+  trimChartData,
+  chartPoints,
 } from "../../frontend/app.js";
 
 beforeEach(() => {
@@ -262,6 +266,10 @@ describe("updateCard", () => {
 });
 
 describe("chart", () => {
+  beforeEach(() => {
+    delete chartPoints.temperature; // mocks replace charts.temperature per test
+  });
+
   it("createChart creates a Chart.js instance", () => {
     const card = createCard("temperature", SENSOR_NUMERIC.temperature, 0);
     document.getElementById("weather-grid").appendChild(card);
@@ -283,19 +291,78 @@ describe("chart", () => {
     expect(ds.data[0].y).toBe(22.5);
   });
 
-  it("appendChartPoint caps at MAX_CHART_POINTS", () => {
-    const ds = { data: [] };
-    for (let i = 0; i < MAX_CHART_POINTS; i++) {
-      ds.data.push({ x: new Date(`2025-01-01T00:${i}:00Z`), y: i });
-    }
-    charts.temperature = {
-      data: { datasets: [ds] },
-      update: vi.fn(),
+  it("appendChartPoint stores epoch milliseconds and drops points older than the history window", () => {
+    const t0 = Date.parse("2025-06-24T00:00:00Z");
+    const hour = 3600 * 1000;
+    const ds = {
+      data: [
+        { x: t0, y: 1 },
+        { x: t0 + 2 * hour, y: 2 },
+      ],
     };
+    charts.temperature = { data: { datasets: [ds] }, update: vi.fn() };
+    delete sensorsConfig.temperature; // default window: HISTORY_HOURS
 
-    appendChartPoint("temperature", 999, "2025-06-24T15:00:00Z");
-    expect(ds.data).toHaveLength(MAX_CHART_POINTS);
-    expect(ds.data[ds.data.length - 1].y).toBe(999);
+    appendChartPoint("temperature", 3, new Date(t0 + (HISTORY_HOURS + 1) * hour).toISOString());
+
+    expect(ds.data.map((p) => p.y)).toEqual([2, 3]);
+    expect(typeof ds.data[1].x).toBe("number");
+    expect(charts.temperature.update).toHaveBeenCalledWith("none");
+  });
+
+  it("keeps appending to the source array after the decimation plugin swaps dataset.data", () => {
+    // Emulates Chart.js: once decimated, `data` reads the decimated view and writes go to `_data`.
+    const source = [{ x: 1, y: 1 }];
+    const ds = {
+      _data: source,
+      _decimated: [{ x: 1, y: 1 }],
+      get data() {
+        return this._decimated;
+      },
+      set data(value) {
+        this._data = value;
+      },
+    };
+    charts.temperature = { data: { datasets: [ds] }, update: vi.fn() };
+    chartPoints.temperature = source;
+
+    appendChartPoint("temperature", 2, new Date(2).toISOString());
+
+    expect(source.map((p) => p.y)).toEqual([1, 2]);
+    expect(ds._data).toBe(source);
+    expect(ds._decimated).toHaveLength(1); // the view is left to the plugin
+    delete chartPoints.temperature;
+  });
+
+  it("trimChartData honours the sensor's own history_hours", () => {
+    sensorsConfig.water_level = { name: "Woda", type: "numeric", history_hours: 1 };
+    const t0 = Date.parse("2025-06-24T00:00:00Z");
+    const data = [
+      { x: t0, y: 1 },
+      { x: t0 + 30 * 60 * 1000, y: 2 },
+      { x: t0 + 61 * 60 * 1000, y: 3 },
+    ];
+
+    trimChartData("water_level", data);
+
+    expect(data.map((p) => p.y)).toEqual([2, 3]);
+    delete sensorsConfig.water_level;
+  });
+
+  it("createChart disables parsing and enables LTTB decimation", () => {
+    const card = createCard("temperature", SENSOR_NUMERIC.temperature, 0);
+    document.getElementById("weather-grid").appendChild(card);
+
+    createChart("chart-temperature", "temperature", "#E53935", 1, "°C");
+
+    const config = Chart.mock.calls.at(-1)[1];
+    expect(config.options.parsing).toBe(false);
+    expect(config.options.normalized).toBe(true);
+    expect(config.options.plugins.decimation).toMatchObject({
+      enabled: true,
+      algorithm: "lttb",
+      threshold: 400,
+    });
   });
 
   it("appendChartPoint does nothing for unknown parameter", () => {
@@ -315,13 +382,14 @@ describe("chart", () => {
     charts.b = c2;
 
     updateChartTheme();
-    expect(c1.update).toHaveBeenCalledOnce();
-    expect(c2.update).toHaveBeenCalledOnce();
+    expect(c1.update).toHaveBeenCalledExactlyOnceWith("none");
+    expect(c2.update).toHaveBeenCalledExactlyOnceWith("none");
   });
 });
 
 describe("loadHistory", () => {
   beforeEach(() => {
+    delete chartPoints.temperature;
     charts.temperature = {
       data: { datasets: [{ data: [] }] },
       update: vi.fn(),
@@ -349,6 +417,59 @@ describe("loadHistory", () => {
       `${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`,
     );
     expect(charts.temperature.data.datasets[0].data).toHaveLength(2);
+  });
+
+  it("keeps live points newer than the history that arrived while loading", async () => {
+    const history = [
+      { timestamp: "2025-06-24T13:00:00Z", value: 22.0, unit: "°C" },
+      { timestamp: "2025-06-24T14:00:00Z", value: 23.0, unit: "°C" },
+    ];
+    charts.temperature.data.datasets[0].data = [
+      { x: Date.parse("2025-06-24T13:30:00Z"), y: 99 }, // covered by history: dropped
+      { x: Date.parse("2025-06-24T14:05:00Z"), y: 24.0 }, // newer than history: kept
+    ];
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(history) });
+
+    await loadHistory("temperature");
+
+    expect(charts.temperature.data.datasets[0].data.map((p) => p.y)).toEqual([22.0, 23.0, 24.0]);
+  });
+
+  it("merges live points from the source array, not the decimated view", async () => {
+    const source = [{ x: Date.parse("2025-06-24T14:05:00Z"), y: 24.0 }];
+    const ds = {
+      _data: source,
+      _decimated: [],
+      get data() {
+        return this._decimated;
+      },
+      set data(value) {
+        this._data = value;
+      },
+    };
+    charts.temperature = { data: { datasets: [ds] }, update: vi.fn() };
+    chartPoints.temperature = source;
+    const history = [{ timestamp: "2025-06-24T14:00:00Z", value: 23.0, unit: "°C" }];
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: () => Promise.resolve(history) });
+
+    await loadHistory("temperature");
+
+    expect(ds._data.map((p) => p.y)).toEqual([23.0, 24.0]);
+    expect(chartPoints.temperature).toBe(ds._data);
+    delete chartPoints.temperature;
+  });
+
+  it("does nothing for sensors without a chart", async () => {
+    globalThis.fetch = vi.fn();
+    delete charts.temperature;
+
+    await loadHistory("temperature");
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("logs error on HTTP failure", async () => {
@@ -395,16 +516,29 @@ describe("loadHistory", () => {
 });
 
 describe("connectWebSocket", () => {
-  let wsMock;
-  let callCount;
+  let sockets;
+  const latest = () => sockets[sockets.length - 1];
 
   beforeEach(() => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
-    callCount = 0;
-    wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
+    sockets = [];
     globalThis.WebSocket = vi.fn(function () {
-      callCount++;
-      return wsMock;
+      const socket = {
+        readyState: 0,
+        onopen: null,
+        onmessage: null,
+        onclose: null,
+        onerror: null,
+        close: vi.fn(),
+      };
+      sockets.push(socket);
+      return socket;
+    });
+    Object.assign(wsState, {
+      socket: null,
+      reconnectTimer: null,
+      reconnectAttempt: 0,
+      attempted: false,
     });
     vi.useFakeTimers();
   });
@@ -412,11 +546,17 @@ describe("connectWebSocket", () => {
   afterEach(() => {
     vi.useRealTimers();
     delete globalThis.WebSocket;
+    Object.assign(wsState, {
+      socket: null,
+      reconnectTimer: null,
+      reconnectAttempt: 0,
+      attempted: false,
+    });
   });
 
   it("updates status to connected on open", () => {
     connectWebSocket();
-    wsMock.onopen();
+    latest().onopen();
     const status = document.getElementById("connection-status");
     expect(status.classList.contains("status--connected")).toBe(true);
     expect(status.textContent).toContain("Połączono");
@@ -424,30 +564,114 @@ describe("connectWebSocket", () => {
 
   it("updates status to disconnected on close", () => {
     connectWebSocket();
-    wsMock.onclose();
+    latest().onclose();
     const status = document.getElementById("connection-status");
     expect(status.classList.contains("status--disconnected")).toBe(true);
     expect(status.textContent).toContain("Rozłączono");
   });
 
-  it("reconnects after 5s on close", () => {
+  it("reconnects with exponential backoff and jitter", () => {
     connectWebSocket();
-    expect(callCount).toBe(1);
-    wsMock.onclose();
-    vi.advanceTimersByTime(5000);
-    expect(callCount).toBe(2);
+    expect(sockets).toHaveLength(1);
+
+    latest().onclose(); // attempt 0: 5 s ± 20 %
+    vi.advanceTimersByTime(3999);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(2001);
+    expect(sockets).toHaveLength(2);
+
+    latest().onclose(); // attempt 1: 10 s ± 20 %
+    vi.advanceTimersByTime(7999);
+    expect(sockets).toHaveLength(2);
+    vi.advanceTimersByTime(4001);
+    expect(sockets).toHaveLength(3);
+  });
+
+  it("resets the backoff after a successful connection", () => {
+    connectWebSocket();
+    latest().onclose();
+    vi.advanceTimersByTime(6000);
+    latest().onopen();
+
+    latest().onclose(); // back to attempt 0
+    vi.advanceTimersByTime(6000);
+    expect(sockets).toHaveLength(3);
+  });
+
+  it("backfills cards, charts, alerts and forecast after a reconnect, not on the first connection", async () => {
+    delete chartPoints.temperature;
+    charts.temperature = { data: { datasets: [{ data: [] }] }, update: vi.fn() };
+    sensorsConfig.temperature = SENSOR_NUMERIC.temperature;
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+
+    connectWebSocket();
+    latest().onopen();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    latest().onclose();
+    vi.advanceTimersByTime(6000);
+    latest().onopen();
+    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(4));
+
+    const urls = globalThis.fetch.mock.calls.map((c) => c[0]);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        `${API_BASE}/current`,
+        `${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`,
+        `${API_BASE}/alerts`,
+        `${API_BASE}/forecast`,
+      ]),
+    );
+    delete charts.temperature;
+  });
+
+  it("backfills on the first successful open when the initial attempt failed (server was down)", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+
+    connectWebSocket();
+    latest().onclose(); // never opened
+    vi.advanceTimersByTime(6000);
+    latest().onopen();
+
+    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    expect(globalThis.fetch.mock.calls.map((c) => c[0])).toContain(`${API_BASE}/current`);
+  });
+
+  it("ignores close events from a socket that was already replaced", () => {
+    connectWebSocket();
+    const stale = latest();
+    stale.readyState = 3;
+    reconnectNow(); // opens a new socket immediately
+    expect(sockets).toHaveLength(2);
+
+    stale.onclose();
+    vi.advanceTimersByTime(60000);
+    expect(sockets).toHaveLength(2); // no extra reconnect scheduled by the stale socket
+  });
+
+  it("reconnectNow skips the pending backoff but does nothing while connected", () => {
+    connectWebSocket();
+    latest().onclose(); // schedules a reconnect in ~5 s
+    latest().readyState = 3;
+    reconnectNow();
+    expect(sockets).toHaveLength(2);
+    expect(wsState.reconnectTimer).toBeNull();
+
+    latest().readyState = 1; // open
+    reconnectNow();
+    expect(sockets).toHaveLength(2);
   });
 
   it("closes socket on error", () => {
     connectWebSocket();
-    wsMock.onerror(new Event("error"));
-    expect(wsMock.close).toHaveBeenCalledOnce();
+    latest().onerror(new Event("error"));
+    expect(latest().close).toHaveBeenCalledOnce();
   });
 
   it("logs warning on parse error", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     connectWebSocket();
-    wsMock.onmessage({ data: "not-json" });
+    latest().onmessage({ data: "not-json" });
     expect(console.warn).toHaveBeenCalledWith("[WS] Message parse error:", expect.any(Error));
     vi.restoreAllMocks();
   });
@@ -1032,6 +1256,7 @@ describe("init", () => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
     globalThis.WebSocket = vi.fn(function () {
       return {
+        readyState: 0, // CONNECTING, like a real socket right after construction
         onopen: null,
         onmessage: null,
         onclose: null,
@@ -1078,6 +1303,31 @@ describe("init", () => {
     expect(grid.querySelector("#card-condition")).toBeTruthy();
     expect(grid.querySelector("#chart-temperature")).toBeTruthy();
     expect(grid.querySelector("#condition-icon-img")).toBeTruthy();
+  });
+
+  it("reconnects the WebSocket when the tab becomes visible or the browser comes back online", async () => {
+    Object.assign(wsState, {
+      socket: null,
+      reconnectTimer: null,
+      reconnectAttempt: 0,
+      attempted: false,
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+
+    await init();
+    expect(globalThis.WebSocket).toHaveBeenCalledTimes(1);
+
+    wsState.socket.readyState = 3; // closed
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(globalThis.WebSocket).toHaveBeenCalledTimes(2);
+
+    wsState.socket.readyState = 3;
+    window.dispatchEvent(new Event("online"));
+    expect(globalThis.WebSocket).toHaveBeenCalledTimes(3);
+
+    wsState.socket.readyState = 1; // open: nothing to do
+    window.dispatchEvent(new Event("online"));
+    expect(globalThis.WebSocket).toHaveBeenCalledTimes(3);
   });
 
   it("registers the service worker before touching the API", async () => {
@@ -1414,24 +1664,47 @@ describe("forecast", () => {
 
     delete sensorsConfig.forecast;
   });
-  it("loadHistory updates condition sensor from history data", async () => {
+  it("loadCurrent fills numeric, condition and text cards from one request", async () => {
     sensorsConfig.condition = SENSOR_CONDITION.condition;
-    const card = createCard("condition", SENSOR_CONDITION.condition, 0);
-    document.getElementById("weather-grid").appendChild(card);
-
-    const history = [
-      { timestamp: "2025-06-24T13:00:00Z", value_str: "Pochmurnie", icon: "mdi:weather-cloudy" },
-      { timestamp: "2025-06-24T14:00:00Z", value_str: "Słonecznie", icon: "mdi:weather-sunny" },
-    ];
+    sensorsConfig.temperature = SENSOR_NUMERIC.temperature;
+    charts.temperature = { data: { datasets: [{ data: [] }] }, update: vi.fn() };
+    const grid = document.getElementById("weather-grid");
+    grid.appendChild(createCard("condition", SENSOR_CONDITION.condition, 0));
+    grid.appendChild(createCard("temperature", SENSOR_NUMERIC.temperature, 1));
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(history),
+      json: () =>
+        Promise.resolve({
+          condition: {
+            value_str: "Słonecznie",
+            icon: "mdi:weather-sunny",
+            timestamp: "2025-06-24T14:00:00Z",
+          },
+          temperature: { value: 21.55, unit: "°C", timestamp: "2025-06-24T14:00:00Z" },
+          pressure: null,
+        }),
     });
 
-    await loadHistory("condition");
+    await loadCurrent();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/current`);
     expect(document.getElementById("condition-value").textContent).toBe("Słonecznie");
     expect(document.getElementById("condition-icon-img").src).toContain("sunny.svg");
+    expect(document.getElementById("temperature-value").textContent).toBe("21.6");
+    expect(document.getElementById("temperature-unit").textContent).toBe("°C");
     delete sensorsConfig.condition;
+    delete sensorsConfig.temperature;
+    delete charts.temperature;
+  });
+
+  it("loadCurrent logs and survives an API error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+
+    await loadCurrent();
+
+    expect(console.error).toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it("loadHistory skips forecast sensor", async () => {

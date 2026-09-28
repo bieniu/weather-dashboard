@@ -44,6 +44,51 @@ async def test_get_current_with_data(async_client, seed_data) -> None:
     assert data["condition"]["value_str"] == "sunny"
 
 
+async def test_get_current_runs_a_single_query(
+    async_client, db_engine, seed_data
+) -> None:
+    """/current fetches the latest row of every sensor with one SELECT, not N."""
+    from sqlalchemy import event
+
+    statements: list[str] = []
+
+    def record(_conn, _cursor, statement, *_args) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", record)
+    try:
+        resp = await async_client.get("/api/weather/current")
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", record)
+
+    assert resp.status_code == 200
+    assert len(statements) == 1
+    data = resp.json()
+    assert data["temperature"]["value"] == 24.0
+    assert data["condition"]["value_str"] == "sunny"
+    assert data["pressure"] is None  # configured sensor without readings
+
+
+async def test_get_current_prefers_newest_row_on_equal_timestamps(
+    async_client, db_session
+) -> None:
+    """Two readings with the same timestamp: the later insert (higher id) wins."""
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    ts = datetime.now(UTC)
+    db_session.add_all(
+        [
+            WeatherReading(parameter="humidity", value=50.0, unit="%", timestamp=ts),
+            WeatherReading(parameter="humidity", value=51.0, unit="%", timestamp=ts),
+        ]
+    )
+    await db_session.commit()
+
+    resp = await async_client.get("/api/weather/current")
+    assert resp.json()["humidity"]["value"] == 51.0
+
+
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
 async def test_get_history(async_client, db_session) -> None:
     """GET /api/weather/history/{param} filters by hours and returns ordered results."""
@@ -67,11 +112,15 @@ async def test_get_history(async_client, db_session) -> None:
     db_session.add_all([old, recent])
     await db_session.commit()
 
-    resp = await async_client.get("/api/weather/history/temperature")
+    resp = await async_client.get("/api/weather/history/temperature?hours=12")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
     assert data[0]["value"] == 20.0
+
+    resp = await async_client.get("/api/weather/history/temperature")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2  # default window is DEFAULT_HISTORY_HOURS (24 h)
 
     resp = await async_client.get("/api/weather/history/temperature?hours=48")
     assert resp.status_code == 200
