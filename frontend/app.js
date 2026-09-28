@@ -651,7 +651,17 @@ function updateForecastLayout() {
   forecastGrid.classList.toggle("forecast-grid--compact", colCount === 1);
 }
 
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch((err) => {
+    console.warn("[SW] Registration failed:", err);
+  });
+}
+
 async function init() {
+  // Independent of the API being reachable: an offline visit must still get
+  // the worker so the next one can use the precached shell.
+  registerServiceWorker();
   initThemeToggle();
   sensorsConfig = await loadSensors();
   const grid = document.getElementById("weather-grid");
@@ -707,6 +717,7 @@ export {
   initThemeToggle,
   loadSensors,
   initAnalytics,
+  registerServiceWorker,
   init,
   charts,
   sensorsConfig,

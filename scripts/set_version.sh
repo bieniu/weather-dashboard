@@ -12,3 +12,7 @@ sed -i 's/^\(\s*\)image: weather-dashboard:.*/\1image: weather-dashboard:'"$VERS
 
 sed -i 's/<!-- CACHE_BUST=[0-9]* -->/<!-- CACHE_BUST='"$CACHE_BUST"' -->/' "$ROOT/frontend/index.html"
 sed -i 's/?v=[0-9]*/?v='"$CACHE_BUST"'/g' "$ROOT/frontend/index.html"
+
+sed -i 's/^const VERSION = "[0-9]*";/const VERSION = "'"$CACHE_BUST"'";/' "$ROOT/frontend/service-worker.js"
+grep -q "^const VERSION = \"$CACHE_BUST\";" "$ROOT/frontend/service-worker.js" \
+  || { echo "service-worker.js VERSION was not updated" >&2; exit 1; }

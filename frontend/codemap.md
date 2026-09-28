@@ -10,8 +10,8 @@ Client-side SPA — Weather Dashboard UI. Displays real-time sensor readings (te
 - **BEM-like class naming** (`weather-card__value`, `forecast-col__day`, `status--connected`). Layout uses CSS Grid (`auto-fill, minmax(380px, 1fr)`) with a single-column breakpoint at 640px.
 - **Responsive forecast layout** — JS-driven via `updateForecastLayout()`. On resize, it reads `gridTemplateColumns` from the weather-grid; if only 1 column fits (narrow viewport), it adds `.forecast-grid--compact` which switches from 5 to 4 columns and hides the 5th day period with `display: none`.
 - **Fonts**: Sora (display), Inter (body), JetBrains Mono (chart ticks) via Google Fonts. Material Symbols Rounded for icons.
-- **PWA**: `manifest.json` enables "standalone" display with 192/512 icons. `service-worker.js` precaches app shell and serves cached-on-fallback for GET requests.
-- **Weather icons**: 16 SVG weather icons (Meteocons fill style) in `weather_icons/`. Condition mapping resolves `mdi:` prefixed codes to SVG files, with day/night variants for partly cloudy.
+- **PWA**: `manifest.json` enables "standalone" display with 192/512 icons. `service-worker.js` (registered from `app.js` at the end of `init()`, not inline, because CSP is `script-src 'self'`) precaches the versioned app shell (`?v=N` URLs, `vendor/` bundles, all weather icons) into a cache named after the release (`VERSION`, rewritten by `scripts/set_version.sh`). Navigations and `/api/weather/sensors` are network-first with the cached copy as offline fallback (so the offline shell can still draw the cards); other same-origin GETs are cache-first and stored on first fetch; all other `/api/*` (live data) and cross-origin requests bypass the worker. Offline, cards render with placeholders because history and live data are never cached.
+- **Weather icons**: 22 SVG weather icons (Meteocons fill style) in `weather_icons/`. Condition mapping resolves `mdi:` prefixed codes to SVG files, with day/night variants for partly cloudy.
 
 ## Flow
 1. **DOMContentLoaded** → `init()` fires:
