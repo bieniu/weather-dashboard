@@ -20,6 +20,7 @@ import {
   loadSensors,
   initAnalytics,
   init,
+  registerServiceWorker,
   charts,
   sensorsConfig,
   sunState,
@@ -994,6 +995,38 @@ describe("loadSunState", () => {
   });
 });
 
+describe("registerServiceWorker", () => {
+  afterEach(() => {
+    delete navigator.serviceWorker;
+    vi.restoreAllMocks();
+  });
+
+  it("registers service-worker.js when the browser supports it", () => {
+    const register = vi.fn().mockResolvedValue({});
+    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
+
+    registerServiceWorker();
+
+    expect(register).toHaveBeenCalledWith("/service-worker.js", { scope: "/" });
+  });
+
+  it("only warns when registration fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const register = vi.fn().mockRejectedValue(new Error("nope"));
+    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
+
+    registerServiceWorker();
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+
+    expect(warn.mock.calls[0][0]).toContain("[SW]");
+  });
+
+  it("does nothing when the browser has no serviceWorker", () => {
+    expect("serviceWorker" in navigator).toBe(false);
+    expect(() => registerServiceWorker()).not.toThrow();
+  });
+});
+
 describe("init", () => {
   beforeEach(() => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
@@ -1045,6 +1078,17 @@ describe("init", () => {
     expect(grid.querySelector("#card-condition")).toBeTruthy();
     expect(grid.querySelector("#chart-temperature")).toBeTruthy();
     expect(grid.querySelector("#condition-icon-img")).toBeTruthy();
+  });
+
+  it("registers the service worker before touching the API", async () => {
+    const register = vi.fn().mockResolvedValue({});
+    Object.defineProperty(navigator, "serviceWorker", { value: { register }, configurable: true });
+    globalThis.fetch = vi.fn(() => Promise.reject(new TypeError("offline")));
+
+    await expect(init()).rejects.toThrow();
+
+    expect(register).toHaveBeenCalledWith("/service-worker.js", { scope: "/" });
+    delete navigator.serviceWorker;
   });
 
   it("sets charts for numeric sensors", async () => {

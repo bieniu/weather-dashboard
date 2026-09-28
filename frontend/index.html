@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Bump CACHE_BUST when deploying frontend changes to invalidate CDN cache -->
+<!-- CACHE_BUST is rewritten by scripts/set_version.sh (together with every ?v= below and VERSION in service-worker.js) -->
 <!-- CACHE_BUST=163 -->
 <html lang="pl" data-theme="light">
   <head>
@@ -58,12 +58,5 @@
     </main>
 
     <script src="app.js?v=163" type="module"></script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker.register("service-worker.js");
-        });
-      }
-    </script>
   </body>
 </html>

@@ -9,7 +9,7 @@ backend/           FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomq
   app/config.py    Reads config.yaml + .env
 frontend/          Vanilla JS + Chart.js (vendored), no build step
   vendor/          Chart.js + date adapter copied from node_modules by `npm run vendor`
-  weather_icons/   16 SVG weather icons (Meteocons fill style)
+  weather_icons/   22 SVG weather icons (Meteocons fill style)
 utils/             Icon generation scripts
   generate_icons.py  Generates weather icons from SVGs
   icon_with_bg.svg   Icon template with background
@@ -34,6 +34,7 @@ docker compose up
 ## Key points
 
 - Backend mounts `/api/weather/*` router, then serves `../frontend/` as static files at `/`
+- PWA: `frontend/service-worker.js` is registered from `app.js` (inline scripts are blocked by CSP). Its `VERSION` constant names the cache and is bumped by `scripts/set_version.sh`; the precache list must only contain files that exist (a single 404 aborts the install), which `tests/frontend/service-worker.test.js` checks.
 - Chart.js and `chartjs-adapter-date-fns` are `dependencies` in `package.json` and their browser bundles live in `frontend/vendor/` (same-origin, CSP `script-src 'self'`). After a version bump run `npm run vendor`; `npm run vendor:check` (CI + pre-commit) fails while the copies are stale.
 - MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
 - WebSocket at `/api/weather/ws` pushes live readings (a browser `Origin` outside `settings.allowed_origins`, or more than `MAX_WS_CONNECTIONS` open handlers / `MAX_WS_CONNECTIONS_PER_IP` per client IP, is refused before `accept()`, which the browser sees as HTTP 403; slow clients are closed after `WS_SEND_TIMEOUT_SECONDS`); REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`

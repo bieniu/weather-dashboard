@@ -23,6 +23,8 @@ export default [
         Chart: "readonly",
         caches: "readonly",
         self: "readonly",
+        URL: "readonly",
+        Request: "readonly",
         process: "readonly",
         Event: "readonly",
         Element: "readonly",

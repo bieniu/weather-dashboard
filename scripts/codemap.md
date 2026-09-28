@@ -9,7 +9,7 @@ Bash scripts following strict idioms (`set -euo pipefail`). Each script is focus
 ## Flow
 `vendor.mjs` copies the Chart.js and date-adapter browser bundles from `node_modules` into `frontend/vendor/` (`--check` only compares them and exits non-zero when stale).
 
-`set_version.sh` takes a version string (e.g. `1.2.3`) as the sole argument and performs four inline `sed` replacements:
+`set_version.sh` takes a version string (e.g. `1.2.3`) as the sole argument and performs five inline `sed` replacements (the fifth sets `VERSION` in `frontend/service-worker.js`, which names the cache):
 1. Update `version = "..."` in `pyproject.toml`
 2. Update `image: weather-dashboard:...` in `docker-compose.yml`
 3. Update `<!-- CACHE_BUST=N -->` comment in `frontend/index.html`
