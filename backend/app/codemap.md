@@ -19,7 +19,8 @@ Application Core — asynchronous FastAPI server acting as the ingestion, persis
 - **WebSocket broadcast** — `WebSocketManager` singleton maintains an ephemeral set of connections; broadcast iterates a copy, discarding disconnected clients on send failure; `disconnect()` is idempotent.
 - **Background tasks** — `cleanup_old_readings()` runs at startup and then every hour as an asyncio task, deleting `WeatherReading` rows older than `RETENTION_DAYS` (30); a failing cycle is logged and retried next cycle. Both tasks are registered in `background_tasks` with a done-callback that logs unexpected exits, and `GET /health` returns 503 naming any task that has stopped, so the Docker healthcheck restarts the container.
 - **Logging** — `lifespan` calls `logging.basicConfig` with `settings.log_level` (env `LOG_LEVEL`, default `INFO`) so `app.*` INFO logs are visible alongside uvicorn's.
-- **Schema migration** — `init_db()` calls `Base.metadata.create_all` then applies additive column migrations from a `_MIGRATIONS` list via `ALTER TABLE ADD COLUMN` (idempotent, built-in, no Alembic).
+- **Schema migration** — `init_db()` calls `Base.metadata.create_all`, applies additive column migrations from a `_MIGRATIONS` list via `ALTER TABLE ADD COLUMN`, then creates any model-declared index missing from an existing table (`Index.create(checkfirst=True)`); idempotent, built-in, no Alembic.
+- **SQLite pragmas** — `create_engine_with_pragmas()` registers a `connect` listener on `engine.sync_engine` that sets `journal_mode=WAL`, `synchronous=NORMAL` and `busy_timeout=5000` on every new connection.
 
 ## Flow
 

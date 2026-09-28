@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import pytest
 from freezegun import freeze_time
 from sqlalchemy import inspect
 
@@ -52,13 +53,20 @@ async def test_default_timestamp(db_session) -> None:
     assert ts == datetime(2026, 6, 23, 12, 0, 0, tzinfo=UTC)
 
 
-async def test_compound_index_exists(db_engine) -> None:
-    """Verify the (parameter, timestamp) compound index exists."""
+@pytest.mark.parametrize(
+    ("name", "columns"),
+    [
+        ("ix_weather_parameter_timestamp", ["parameter", "timestamp"]),
+        ("ix_weather_parameter_valid_to", ["parameter", "valid_to"]),
+        ("ix_weather_timestamp", ["timestamp"]),
+    ],
+)
+async def test_index_exists(db_engine, name, columns) -> None:
+    """Each index declared on the model is created with the expected columns."""
     async with db_engine.connect() as conn:
         indexes = await conn.run_sync(
             lambda sync_conn: inspect(sync_conn).get_indexes("weather_readings")
         )
 
-    assert any(idx["column_names"] == ["parameter", "timestamp"] for idx in indexes), (
-        "Expected compound index ix_weather_parameter_timestamp"
-    )
+    by_name = {idx["name"]: idx["column_names"] for idx in indexes}
+    assert by_name.get(name) == columns

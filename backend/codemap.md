@@ -11,8 +11,8 @@ Backend Service Layer — ingests sensor data from an MQTT broker, persists read
 - **Project layout:**
   - `app/main.py` — application factory, middleware stack, lifespan hooks.
   - `app/config.py` — `Settings` (pydantic-settings from `.env`) + `SensorConfig` (from `config.yaml`).
-  - `app/database.py` — async engine, session factory, schema migrations via `_MIGRATIONS`.
-  - `app/models.py` — `WeatherReading` ORM model with compound indexes.
+  - `app/database.py` — async engine with SQLite pragmas (WAL, `synchronous=NORMAL`, `busy_timeout`), session factory, schema migrations (`_MIGRATIONS` columns + missing-index creation).
+  - `app/models.py` — `WeatherReading` ORM model with compound indexes plus a timestamp-only index for retention cleanup.
   - `app/schemas.py` — `WeatherReadingOut` Pydantic output schema with UTC serialization.
   - `app/mqtt_client.py` — `aiomqtt` subscriber, `WebSocketManager` broadcast hub, per-sensor-type message dispatch (numeric, condition, text, alerts, forecast, sun).
   - `app/ratelimit.py` — sliding-window rate limiter middleware (100 req/min per IP, `/api/*` paths only).

@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 os.environ.setdefault("MQTT_BROKER", "localhost")
 os.environ.setdefault("MQTT_USER", "test")
@@ -24,8 +24,12 @@ sys.path.insert(0, str(_backend_dir))
 @pytest.fixture
 async def db_engine():
     """Create a fresh in-memory SQLite engine for each test."""
-    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
-    from app.database import Base  # ty: ignore[unresolved-import]
+    from app.database import (  # ty: ignore[unresolved-import]
+        Base,
+        create_engine_with_pragmas,
+    )
+
+    engine = create_engine_with_pragmas("sqlite+aiosqlite://")
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

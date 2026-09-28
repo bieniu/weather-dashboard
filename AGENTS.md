@@ -37,7 +37,8 @@ docker compose up
 - WebSocket at `/api/weather/ws` pushes live readings; REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`
 - DB cleanup: deletes readings older than 30d, runs at startup and then every hour in a background asyncio task; `/health` returns 503 when a background task has died
 - Logging: `LOG_LEVEL` env var (default `INFO`) configures the root logger in `lifespan`
-- DB migrations: `init_db()` in `backend/app/database.py` applies schema migrations from the `_MIGRATIONS` list. When adding a new column to `WeatherReading` model, add it to `_MIGRATIONS` and update `test_init_db_adds_missing_columns` to cover it.
+- DB migrations: `init_db()` in `backend/app/database.py` applies schema migrations from the `_MIGRATIONS` list, then creates any index declared on the models that the existing table lacks (`create_all` never touches existing tables). When adding a new column to `WeatherReading`, add it to `_MIGRATIONS`; a new `Index` in `__table_args__` needs no migration entry. Extend `test_init_db_adds_missing_columns_and_indexes` either way.
+- SQLite pragmas: every connection gets `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000` via `create_engine_with_pragmas()` (tests use the same factory). WAL keeps `weather.db-wal`/`-shm` files next to the database, so back it up with `sqlite3 weather.db ".backup out.db"` (or `VACUUM INTO`), never by copying `weather.db` alone while the app runs.
 - Linting: `ruff check backend` (run from root)
 - Formatting: `ruff format backend` (run from root). Ruff selects `ALL` rules with minimal ignores (D203, D213).
 - Type checking: `ty check backend` (run from root). configured in `pyproject.toml` (root).
@@ -97,8 +98,8 @@ Failing any of these must be fixed before the implementation is complete.
 | File | What it covers |
 |---|---|
 | `test_config.py` | `SensorConfig`, `Settings` (sensors, prefix, CORS) |
-| `test_database.py` | Table creation, session insert/query, `get_db` |
-| `test_models.py` | ORM creation, default timestamp, compound index |
+| `test_database.py` | Table creation, column + index migrations, SQLite pragmas, cleanup query plan, `get_db` |
+| `test_models.py` | ORM creation, default timestamp, declared indexes |
 | `test_schemas.py` | `WeatherReadingOut` serialization, tz handling, nullables |
 | `test_mqtt_client.py` | Topic map, `WebSocketManager`, `_process_mqtt_message` (numeric, condition, error paths), broadcast |
 | `test_ratelimit.py` | Rate limiter unit tests (pass, 429, non-API bypass, cleanup, per-IP isolation) |

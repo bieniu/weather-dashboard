@@ -29,4 +29,6 @@ class WeatherReading(Base):
     __table_args__ = (
         Index("ix_weather_parameter_timestamp", "parameter", "timestamp"),
         Index("ix_weather_parameter_valid_to", "parameter", "valid_to"),
+        # Retention cleanup filters on timestamp alone (no leading parameter).
+        Index("ix_weather_timestamp", "timestamp"),
     )
