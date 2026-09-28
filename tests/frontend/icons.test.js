@@ -1,17 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { load as loadYaml } from "js-yaml";
-import { THEME_ICONS } from "../../frontend/app.js";
+import { THEME_ICONS } from "../../frontend/theme.js";
 
 // vitest (and `npm test`) run from the repository root.
 const ROOT = process.cwd();
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
 
-/** Ligature names the UI can render (index.html, app.js, config.yaml icons). */
+const MODULES = readdirSync(join(ROOT, "frontend")).filter((f) => f.endsWith(".js"));
+
+/** Ligature names the UI can render (index.html, the JS modules, config.yaml icons). */
 function usedIconNames() {
   const names = new Set();
-  for (const source of [read("frontend/index.html"), read("frontend/app.js")]) {
+  const sources = ["frontend/index.html", ...MODULES.map((f) => `frontend/${f}`)].map(read);
+  for (const source of sources) {
     for (const m of source.matchAll(/material-symbols-rounded[^>]*>\s*([a-z0-9_]+)\s*</g)) {
       names.add(m[1]);
     }

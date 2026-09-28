@@ -24,6 +24,34 @@ def test_sensor_config_rejects_history_hours_out_of_range(history_hours) -> None
         SensorConfig(name="Test", history_hours=history_hours)
 
 
+def test_sensor_config_rejects_unknown_type() -> None:
+    """A typo in ``type:`` fails at config load instead of per message."""
+    from app.config import SensorConfig  # ty: ignore[unresolved-import]
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        SensorConfig(name="Test", type="forecasts")
+
+
+@pytest.mark.parametrize(
+    ("sensor_type", "expected"),
+    [("alerts", "alerts"), ("forecast", "forecast"), ("condition", "condition")],
+)
+def test_settings_key_for_type(sensor_type, expected) -> None:
+    """key_for_type returns the configured sensor key of that type."""
+    from app.config import SensorType, settings  # ty: ignore[unresolved-import]
+
+    assert settings.key_for_type(SensorType(sensor_type)) == expected
+
+
+def test_settings_key_for_type_missing() -> None:
+    """key_for_type returns None when no sensor of that type is configured."""
+    from app.config import SensorType, Settings  # ty: ignore[unresolved-import]
+
+    settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u", sensors={})
+    assert settings.key_for_type(SensorType.ALERTS) is None
+
+
 def test_sensor_config_explicit() -> None:
     """SensorConfig accepts all fields explicitly."""
     from app.config import SensorConfig  # ty: ignore[unresolved-import]
@@ -93,7 +121,6 @@ def test_settings_allowed_origins_defaults() -> None:
     settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u")
     assert settings.allowed_origins == [
         "http://localhost",
-        "http://localhost:8332",
         "http://localhost:8332",
         "http://127.0.0.1:8332",
     ]

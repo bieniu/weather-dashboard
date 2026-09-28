@@ -1,10 +1,42 @@
 """ORM models for weather readings."""
 
 from datetime import UTC, datetime
+from typing import override
 
-from sqlalchemy import Column, DateTime, Float, Index, Integer, String
+from sqlalchemy import DateTime, Dialect, Index, String
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 from .database import Base
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """``DATETIME`` column that always hands back timezone-aware UTC values.
+
+    SQLite stores no offset, so a plain ``DateTime(timezone=True)`` reads back
+    naive datetimes. Aware values are converted to UTC before they are written.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    @override
+    def process_bind_param(
+        self, value: datetime | None, dialect: Dialect
+    ) -> datetime | None:
+        """Store aware values as UTC (SQLite drops the offset)."""
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(UTC)
+        return value
+
+    @override
+    def process_result_value(
+        self, value: datetime | None, dialect: Dialect
+    ) -> datetime | None:
+        """Attach UTC to the naive value SQLite returns."""
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class WeatherReading(Base):
@@ -12,18 +44,16 @@ class WeatherReading(Base):
 
     __tablename__ = "weather_readings"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    parameter = Column(String(50), nullable=False)  # "temperature" | "humidity" | ...
-    value = Column(Float, nullable=True)  # None for condition/alert type
-    unit = Column(String(10), nullable=False, default="")  # "°C" | "%" | ""
-    value_str = Column(String(100), nullable=True)  # string value for condition/alert
-    icon = Column(String(50), nullable=True)  # weather icon for condition sensor
-    level = Column(String(20), nullable=True)  # alert level e.g. "yellow"
-    valid_to = Column(DateTime(timezone=True), nullable=True)  # alert expiry
-    timestamp = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False,
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    parameter: Mapped[str] = mapped_column(String(50))  # "temperature" | ...
+    value: Mapped[float | None]  # None for condition/alert type
+    unit: Mapped[str] = mapped_column(String(10), default="")  # "°C" | "%" | ""
+    value_str: Mapped[str | None] = mapped_column(String(100))  # condition/alert
+    icon: Mapped[str | None] = mapped_column(String(50))  # condition sensor icon
+    level: Mapped[str | None] = mapped_column(String(20))  # alert level "yellow"
+    valid_to: Mapped[datetime | None] = mapped_column(UTCDateTime)  # alert expiry
+    timestamp: Mapped[datetime] = mapped_column(
+        UTCDateTime, default=lambda: datetime.now(UTC)
     )
 
     __table_args__ = (

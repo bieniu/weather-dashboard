@@ -1,185 +1,141 @@
-"""Tests for app.ratelimit — sliding-window rate limiter."""
+"""Tests for app.ratelimit — client-IP resolution and sliding-window limiter."""
 
+import time
 from collections import deque
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from httpx import ASGITransport, AsyncClient
+
+API_PATH = "/api/weather/sensors"
 
 
-async def test_single_request_passes() -> None:
-    """A single request under the limit is allowed through."""
+@pytest.fixture
+async def limiter():
+    """RateLimitMiddleware around an app that records scopes; plus a client."""
     from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
+    from starlette.responses import PlainTextResponse
 
-    request = MagicMock()
-    request.url.path = "/api/weather/sensors"
-    request.state.real_ip = "1.2.3.4"
+    seen: list[dict] = []
 
-    call_next = AsyncMock()
-    call_next.return_value = MagicMock(status_code=200)
+    async def inner(scope, receive, send) -> None:
+        seen.append(scope)
+        if scope["type"] == "http":
+            await PlainTextResponse("ok")(scope, receive, send)
 
-    middleware = RateLimitMiddleware(MagicMock())
-    response = await middleware.dispatch(request, call_next)
-    assert response.status_code == 200
+    middleware = RateLimitMiddleware(inner)
+    transport = ASGITransport(app=middleware)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+
+        async def hit(ip: str, path: str = API_PATH) -> int:
+            resp = await client.get(path, headers={"Cf-Connecting-IP": ip})
+            return resp.status_code
+
+        yield middleware, client, hit, seen
 
 
-async def test_rate_limit_exceeded() -> None:
-    """Requests beyond the rate limit return 429."""
-    from app.ratelimit import (  # ty: ignore[unresolved-import]
-        RATE_LIMIT,
-        RateLimitMiddleware,
-    )
+async def test_single_request_passes_and_sets_real_ip(limiter) -> None:
+    """A request under the limit reaches the app with the Cloudflare client IP."""
+    _middleware, _client, hit, seen = limiter
 
-    middleware = RateLimitMiddleware(MagicMock())
+    assert await hit("1.2.3.4") == 200
+    assert seen[0]["state"]["real_ip"] == "1.2.3.4"
 
-    ip = "5.6.7.8"
+
+async def test_real_ip_falls_back_to_socket_peer(limiter) -> None:
+    """Without Cf-Connecting-IP the socket peer address is the key."""
+    middleware, client, _hit, seen = limiter
+
+    resp = await client.get(API_PATH)
+
+    assert resp.status_code == 200
+    assert seen[0]["state"]["real_ip"] == "127.0.0.1"  # httpx ASGITransport client
+    assert list(middleware._windows) == ["127.0.0.1"]
+
+
+def test_client_ip_without_client_is_unknown() -> None:
+    """A scope without a peer address (e.g. a unix socket) is keyed as unknown."""
+    from app.ratelimit import client_ip  # ty: ignore[unresolved-import]
+
+    assert client_ip({"type": "http", "headers": [], "client": None}) == "unknown"
+
+
+async def test_rate_limit_exceeded_returns_429_with_retry_after(limiter) -> None:
+    """Requests beyond the limit get 429 + Retry-After and never reach the app."""
+    from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
+
+    _middleware, client, hit, seen = limiter
     for _ in range(RATE_LIMIT):
-        request = MagicMock()
-        request.url.path = "/api/weather/sensors"
-        request.state.real_ip = ip
-        call_next = AsyncMock()
-        call_next.return_value = MagicMock(status_code=200)
-        resp = await middleware.dispatch(request, call_next)
-        assert resp.status_code == 200
+        assert await hit("5.6.7.8") == 200
 
-    request = MagicMock()
-    request.url.path = "/api/weather/sensors"
-    request.state.real_ip = ip
-    call_next = AsyncMock()
-    resp = await middleware.dispatch(request, call_next)
+    resp = await client.get(API_PATH, headers={"Cf-Connecting-IP": "5.6.7.8"})
+
     assert resp.status_code == 429
-    call_next.assert_not_called()
-
-
-async def test_rate_limit_returns_retry_after_header() -> None:
-    """A 429 response includes a Retry-After header."""
-    from app.ratelimit import (  # ty: ignore[unresolved-import]
-        RATE_LIMIT,
-        RateLimitMiddleware,
-    )
-
-    middleware = RateLimitMiddleware(MagicMock())
-
-    ip = "9.10.11.12"
-    for _ in range(RATE_LIMIT):
-        request = MagicMock()
-        request.url.path = "/api/weather/sensors"
-        request.state.real_ip = ip
-        call_next = AsyncMock()
-        call_next.return_value = MagicMock(status_code=200)
-        await middleware.dispatch(request, call_next)
-
-    request = MagicMock()
-    request.url.path = "/api/weather/sensors"
-    request.state.real_ip = ip
-    call_next = AsyncMock()
-    resp = await middleware.dispatch(request, call_next)
-    assert resp.status_code == 429
-    assert resp.headers.get("Retry-After") == "60"
+    assert resp.headers["Retry-After"] == "60"
+    assert resp.json() == {"detail": "Too many requests — try again later."}
+    assert len(seen) == RATE_LIMIT
 
 
 @pytest.mark.parametrize("path", ["/", "/index.html", "/style.css", "/health"])
-async def test_non_api_path_bypasses_rate_limit(path) -> None:
+async def test_non_api_path_bypasses_rate_limit(limiter, path) -> None:
     """Paths outside /api/ pass through without consuming the window."""
-    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
+    middleware, _client, hit, _seen = limiter
 
-    middleware = RateLimitMiddleware(MagicMock())
-
-    request = MagicMock()
-    request.url.path = path
-    request.state.real_ip = "1.2.3.4"
-    call_next = AsyncMock()
-    call_next.return_value = MagicMock(status_code=200)
-
-    response = await middleware.dispatch(request, call_next)
-    assert response.status_code == 200
+    assert await hit("1.2.3.4", path) == 200
     assert "1.2.3.4" not in middleware._windows
 
 
-async def test_different_ips_have_separate_windows() -> None:
+async def test_non_http_scope_passes_through_untouched(limiter) -> None:
+    """WebSocket (and lifespan) scopes are forwarded without state or counting."""
+    middleware, _client, _hit, seen = limiter
+    scope = {"type": "websocket", "path": API_PATH, "headers": []}
+
+    async def receive() -> dict:
+        return {}
+
+    async def send(_message: dict) -> None:
+        pass
+
+    await middleware(scope, receive, send)
+
+    assert seen == [{"type": "websocket", "path": API_PATH, "headers": []}]
+    assert not middleware._windows
+
+
+async def test_different_ips_have_separate_windows(limiter) -> None:
     """Rate limit windows are isolated per IP address."""
-    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
+    from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
 
-    middleware = RateLimitMiddleware(MagicMock())
+    _middleware, _client, hit, _seen = limiter
+    for _ in range(RATE_LIMIT):
+        await hit("10.0.0.1")
 
-    def make_request(ip: str) -> MagicMock:
-        req = MagicMock()
-        req.url.path = "/api/weather/sensors"
-        req.state.real_ip = ip
-        return req
-
-    ip_a = "10.0.0.1"
-    ip_b = "10.0.0.2"
-
-    for _ in range(100):
-        call_next = AsyncMock()
-        call_next.return_value = MagicMock(status_code=200)
-        await middleware.dispatch(make_request(ip_a), call_next)
-
-    call_next = AsyncMock()
-    resp = await middleware.dispatch(make_request(ip_a), call_next)
-    assert resp.status_code == 429
-
-    call_next = AsyncMock()
-    call_next.return_value = MagicMock(status_code=200)
-    resp = await middleware.dispatch(make_request(ip_b), call_next)
-    assert resp.status_code == 200
+    assert await hit("10.0.0.1") == 429
+    assert await hit("10.0.0.2") == 200
 
 
-async def test_cleanup_removes_expired_entries() -> None:
-    """The periodic cleanup removes stale IP entries from the window."""
-    from app.ratelimit import RateLimitMiddleware  # ty: ignore[unresolved-import]
+async def test_cleanup_removes_expired_entries(limiter) -> None:
+    """Every CLEANUP_EVERY counted requests, idle IP entries are dropped."""
+    from app.ratelimit import CLEANUP_EVERY  # ty: ignore[unresolved-import]
 
-    middleware = RateLimitMiddleware(MagicMock())
+    middleware, _client, hit, _seen = limiter
+    await hit("expired_ip")
+    middleware._windows["expired_ip"] = deque([time.monotonic() - 120])
 
-    request = MagicMock()
-    request.url.path = "/api/weather/sensors"
-    request.state.real_ip = "expired_ip"
-    call_next = AsyncMock()
-    call_next.return_value = MagicMock(status_code=200)
-
-    await middleware.dispatch(request, call_next)
-
+    for _ in range(CLEANUP_EVERY - 2):
+        await hit("other")
     assert "expired_ip" in middleware._windows
-
-    import time
-
-    old_time = time.monotonic() - 120
-    middleware._windows["expired_ip"] = type(middleware._windows["expired_ip"])(
-        [old_time]
-    )
-
-    for _ in range(99):
-        other_req = MagicMock()
-        other_req.url.path = "/api/weather/sensors"
-        other_req.state.real_ip = "other"
-        other_call = AsyncMock()
-        other_call.return_value = MagicMock(status_code=200)
-        await middleware.dispatch(other_req, other_call)
-
-    trigger_req = MagicMock()
-    trigger_req.url.path = "/api/weather/sensors"
-    trigger_req.state.real_ip = "trigger"
-    trigger_call = AsyncMock()
-    trigger_call.return_value = MagicMock(status_code=200)
-    await middleware.dispatch(trigger_req, trigger_call)
+    await hit("trigger")
 
     assert "expired_ip" not in middleware._windows
+    assert set(middleware._windows) == {"other", "trigger"}
 
 
-async def test_tracked_ips_are_capped_with_lru_eviction(monkeypatch) -> None:
+async def test_tracked_ips_are_capped_with_lru_eviction(limiter, monkeypatch) -> None:
     """Beyond MAX_TRACKED_IPS the least recently seen key is dropped, not the newest."""
     from app import ratelimit  # ty: ignore[unresolved-import]
 
     monkeypatch.setattr(ratelimit, "MAX_TRACKED_IPS", 3)
-    middleware = ratelimit.RateLimitMiddleware(MagicMock())
-
-    async def hit(ip: str) -> None:
-        request = MagicMock()
-        request.url.path = "/api/weather/sensors"
-        request.state.real_ip = ip
-        call_next = AsyncMock()
-        call_next.return_value = MagicMock(status_code=200)
-        await middleware.dispatch(request, call_next)
+    middleware, _client, hit, _seen = limiter
 
     for ip in ("a", "b", "c"):
         await hit(ip)
@@ -187,26 +143,15 @@ async def test_tracked_ips_are_capped_with_lru_eviction(monkeypatch) -> None:
     await hit("d")
 
     assert list(middleware._windows) == ["c", "a", "d"]
-    assert len(middleware._windows) == 3
 
 
-async def test_expired_hits_leave_the_window_on_next_request() -> None:
+async def test_expired_hits_leave_the_window_on_next_request(limiter) -> None:
     """Hits older than WINDOW_SECONDS are pruned, so a full window admits again."""
-    import time
-
     from app import ratelimit  # ty: ignore[unresolved-import]
 
-    middleware = ratelimit.RateLimitMiddleware(MagicMock())
+    middleware, _client, hit, _seen = limiter
     stale = time.monotonic() - ratelimit.WINDOW_SECONDS - 1
     middleware._windows["1.2.3.4"] = deque([stale] * ratelimit.RATE_LIMIT)
 
-    request = MagicMock()
-    request.url.path = "/api/weather/sensors"
-    request.state.real_ip = "1.2.3.4"
-    call_next = AsyncMock()
-    call_next.return_value = MagicMock(status_code=200)
-
-    response = await middleware.dispatch(request, call_next)
-
-    assert response.status_code == 200
+    assert await hit("1.2.3.4") == 200
     assert len(middleware._windows["1.2.3.4"]) == 1  # only the fresh hit remains

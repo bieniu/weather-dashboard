@@ -1,775 +1,31 @@
-const API_BASE = "/api/weather";
-const WS_PROTOCOL = location.protocol === "https:" ? "wss:" : "ws:";
-const WS_URL = `${WS_PROTOCOL}//${location.host}/api/weather/ws`;
-const HISTORY_HOURS = 24; // mirrors DEFAULT_HISTORY_HOURS in backend/app/config.py
-const CHART_DECIMATION_SAMPLES = 200;
-const WS_RECONNECT_BASE_MS = 5000;
-const WS_RECONNECT_MAX_MS = 60000;
-const WS_RECONNECT_JITTER = 0.2;
-const WS_STATE_CONNECTING = 0;
-const WS_STATE_OPEN = 1;
+// Entry module (index.html loads it as app.js?v=N). The other modules are
+// imported without a query string and precached by service-worker.js.
+import { getJson, loadSensors, resetSensors } from "./api.js";
+import {
+  loadAlerts,
+  requestNotificationPermission,
+  resetAlerts,
+  scheduleAlertCheck,
+} from "./alerts.js";
+import {
+  createCard,
+  isChartSensor,
+  loadCurrent,
+  loadForecast,
+  loadSunState,
+  resetCards,
+} from "./cards.js";
+import { chartPoints, charts, createChart, loadAllHistory, resetCharts } from "./charts.js";
+import { resetIcons } from "./icons.js";
+import { initThemeToggle } from "./theme.js";
+import { connectWebSocket, reconnectNow, resetWebSocket } from "./ws.js";
 
-const MDI_TO_KEY = {
-  "weather-sunny": "sunny",
-  "weather-cloudy": "cloudy",
-  "weather-foggy": "fog",
-  "weather-hail": "hail",
-  "weather-partly-cloudy": "partlycloudy",
-  "weather-pouring": "pouring",
-  "weather-rainy": "rainy",
-  "weather-snowy": "snowy",
-  "weather-snowy-rainy": "snowy-rainy",
-  "weather-windy": "windy",
-  "weather-windy-variant": "windy-variant",
-  "weather-lightning": "lightning",
-  "weather-lightning-rainy": "lightning-rainy",
-  "weather-clear-night": "clear-night",
-  "clear-night": "clear-night",
-  "weather-night": "clear-night",
-  "weather-exceptional": "exceptional",
-};
+const SENSORS_ERROR =
+  "Nie udało się wczytać konfiguracji czujników. Odśwież stronę, aby spróbować ponownie.";
 
-const SVG_FILE = {
-  "clear-night": "clear-night.svg",
-  cloudy: "cloudy.svg",
-  exceptional: "exceptional.svg",
-  fog: "fog.svg",
-  hail: "hail.svg",
-  lightning: "lightning.svg",
-  "lightning-rainy": "lightning-rainy.svg",
-  pouring: "pouring.svg",
-  rainy: "rainy.svg",
-  snowy: "snowy.svg",
-  "snowy-rainy": "snowy-rainy.svg",
-  sunny: "sunny.svg",
-  windy: "windy.svg",
-  "windy-variant": "windy-variant.svg",
-};
-
-function getConditionSvgPath(iconField, timestamp, isDaytime) {
-  const raw = iconField.startsWith("mdi:") ? iconField.slice(4) : iconField;
-  const key = MDI_TO_KEY[raw] || raw;
-
-  if (key === "partlycloudy") {
-    if (isDaytime !== undefined) {
-      return isDaytime
-        ? "weather_icons/partly-cloudy-day.svg"
-        : "weather_icons/partly-cloudy-night.svg";
-    }
-    if (sunState.value === "above_horizon") {
-      return "weather_icons/partly-cloudy-day.svg";
-    }
-    if (sunState.value === "below_horizon") {
-      return "weather_icons/partly-cloudy-night.svg";
-    }
-    const date = timestamp ? new Date(timestamp) : new Date();
-    const hour = date.getHours();
-    return hour >= 6 && hour < 20
-      ? "weather_icons/partly-cloudy-day.svg"
-      : "weather_icons/partly-cloudy-night.svg";
-  }
-  const file = SVG_FILE[key];
-  return file ? `weather_icons/${file}` : null;
-}
-
-function getPolishDayAbbr(date) {
-  const days = ["nie", "pon", "wto", "śro", "czw", "pią", "sob"];
-  return days[date.getDay()];
-}
-
-const ALERT_ICONS = {
-  yellow: "weather_icons/alert-yellow.svg",
-  orange: "weather_icons/alert-orange.svg",
-  red: "weather_icons/alert-red.svg",
-};
-const ALERT_GREEN_ICON = "weather_icons/alert-green.svg";
-
-const charts = {};
-// Source arrays of chart points, keyed by parameter. Once the decimation
-// plugin kicks in, Chart.js replaces `dataset.data` with an accessor to the
-// decimated copy, so the real array must be owned here and re-assigned.
-const chartPoints = {};
-let sensorsConfig = {};
-const sunState = { value: null };
-const conditionIconMap = {};
-
-const alerts = [];
-let alertTimerId = null;
-
-// WebSocket connection state (exported so tests can reset it).
-const wsState = { socket: null, reconnectTimer: null, reconnectAttempt: 0, attempted: false };
-
-async function getJson(path) {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-function showAlertCard(alert) {
-  const card = document.getElementById("card-alerts");
-  if (!card) return;
-
-  const img = document.getElementById("alerts-icon-img");
-  if (img) {
-    img.src =
-      alert.level == null ? ALERT_GREEN_ICON : ALERT_ICONS[alert.level] || ALERT_ICONS.yellow;
-    img.alt = alert.level ?? "green";
-  }
-  const valueEl = document.getElementById("alerts-value");
-  if (valueEl) valueEl.textContent = alert.value;
-  const updatedEl = document.getElementById("alerts-updated");
-  if (updatedEl) updatedEl.textContent = alert.updatedText || "";
-
-  card.style.display = "";
-}
-
-function hideAlertCard() {
-  const card = document.getElementById("card-alerts");
-  if (card) card.style.display = "none";
-}
-
-function updateAlertVisibility() {
-  const now = new Date();
-  for (let i = alerts.length - 1; i >= 0; i--) {
-    if (new Date(alerts[i].valid_to) <= now) {
-      alerts.splice(i, 1);
-    }
-  }
-  const valid = alerts.find((a) => new Date(a.valid_to) > now);
-  if (valid) showAlertCard(valid);
-  else hideAlertCard();
-}
-
-function scheduleAlertCheck() {
-  if (alertTimerId) return;
-  alertTimerId = setInterval(updateAlertVisibility, 30000);
-  window.addEventListener("beforeunload", () => {
-    if (alertTimerId) clearInterval(alertTimerId);
-  });
-}
-
-function handleAlertUpdate(alertData) {
-  const existing = alerts.find((a) => a.timestamp === alertData.timestamp);
-  if (!existing) {
-    alerts.unshift(alertData);
-    sendAlertNotification(alertData);
-  } else {
-    Object.assign(existing, alertData);
-  }
-  updateAlertVisibility();
-}
-
-function sendAlertNotification(alertData) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const levelLabel =
-    { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony", null: "Zielony" }[
-      alertData.level
-    ] || alertData.level;
-  const validTo = new Date(alertData.valid_to);
-  const now = new Date();
-  const validToText =
-    validTo.getFullYear() === now.getFullYear() &&
-    validTo.getMonth() === now.getMonth() &&
-    validTo.getDate() === now.getDate()
-      ? validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })
-      : `${validTo.toLocaleDateString("pl-PL", { day: "numeric", month: "long" })}, ${validTo.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" })}`;
-  new Notification("Alert meteorologiczny", {
-    body: `${levelLabel} alert: ${alertData.value}\nWażny do: ${validToText}`,
-    tag: alertData.timestamp,
-  });
-}
-
-function requestNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
-function rerenderConditionIcons() {
-  for (const [param, sensor] of Object.entries(sensorsConfig)) {
-    if (sensor.type === "condition" && conditionIconMap[param]) {
-      const img = document.getElementById(`${param}-icon-img`);
-      if (img) img.src = getConditionSvgPath(conditionIconMap[param]);
-    }
-  }
-}
-
-async function loadSunState() {
+export async function initAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/sun`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.value === "above_horizon" || data.value === "below_horizon") {
-      sunState.value = data.value;
-      rerenderConditionIcons();
-    }
-  } catch (err) {
-    console.warn("[Sun] Error loading sun state:", err);
-  }
-}
-
-async function loadForecast() {
-  try {
-    const res = await fetch(`${API_BASE}/forecast`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const forecastData = data.forecast;
-    const timestamp = data.timestamp;
-    if (Array.isArray(forecastData) && forecastData.length > 0) {
-      const forecastKey = Object.entries(sensorsConfig).find(([, s]) => s.type === "forecast")?.[0];
-      if (forecastKey) {
-        updateCard(forecastKey, forecastData, null, timestamp ?? new Date().toISOString());
-      }
-    }
-  } catch (err) {
-    console.error("[Forecast] Error loading forecast:", err);
-  }
-}
-
-async function loadAlerts() {
-  try {
-    const res = await fetch(`${API_BASE}/alerts`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    alerts.length = 0;
-    for (const r of data) {
-      alerts.push({
-        value: r.value_str,
-        valid_to: r.valid_to,
-        level: r.level,
-        timestamp: r.timestamp,
-        updatedText: formatUpdated(r.timestamp),
-      });
-    }
-    updateAlertVisibility();
-  } catch (err) {
-    console.error("[Alerts] Error fetching alerts:", err);
-  }
-}
-
-function formatTimestamp(value) {
-  const d = new Date(value); // ISO string or epoch milliseconds (chart points)
-  return d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatUpdated(isoString) {
-  const d = new Date(isoString);
-  return `Zaktualizowano: ${d.toLocaleTimeString("pl-PL")}`;
-}
-
-function resolveIcon(iconStr) {
-  return iconStr.replace(/^mdi:/, "");
-}
-
-function getCssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function createCard(sensorKey, sensor, index) {
-  const card = document.createElement("article");
-  card.className = "weather-card";
-  card.id = `card-${sensorKey.replace(/_/g, "-")}`;
-  card.style.setProperty("--card-index", index);
-  if (sensor.color) {
-    card.style.setProperty("--sensor-color", sensor.color);
-  }
-
-  if (sensor.type === "alerts") {
-    card.style.display = "none";
-    card.innerHTML = `
-      <div class="weather-card__header weather-card__header--condition">
-        <span class="weather-card__label">${sensor.name}</span>
-      </div>
-      <div class="weather-card__value-wrap weather-card__value-wrap--condition">
-        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-img" src="" alt="">
-        <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
-      </div>
-      <p class="weather-card__updated" id="${sensorKey}-updated"></p>
-    `;
-  } else if (sensor.type === "forecast") {
-    card.innerHTML = `
-      <div class="weather-card__header">
-        <span class="weather-card__label">${sensor.name}</span>
-      </div>
-      <div class="forecast-grid" id="${sensorKey}-forecast">
-        <div class="forecast-col">
-          <div class="forecast-col__day">--</div>
-          <div class="forecast-col__period">--</div>
-          <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
-          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
-          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
-          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
-        </div>
-        <div class="forecast-col">
-          <div class="forecast-col__day">--</div>
-          <div class="forecast-col__period">--</div>
-          <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
-          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
-          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
-          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
-        </div>
-        <div class="forecast-col">
-          <div class="forecast-col__day">--</div>
-          <div class="forecast-col__period">--</div>
-          <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
-          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
-          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
-          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
-        </div>
-        <div class="forecast-col">
-          <div class="forecast-col__day">--</div>
-          <div class="forecast-col__period">--</div>
-          <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
-          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
-          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
-          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
-        </div>
-        <div class="forecast-col">
-          <div class="forecast-col__day">--</div>
-          <div class="forecast-col__period">--</div>
-          <img class="forecast-col__icon" src="" alt="">
-          <div class="forecast-col__temp"><span class="material-symbols-rounded forecast-col__val-icon">thermometer</span><span class="forecast-col__temp-value">--</span></div>
-          <div class="forecast-col__wind"><span class="material-symbols-rounded forecast-col__val-icon">air</span><span class="forecast-col__wind-value">--</span></div>
-          <div class="forecast-col__precip"><span class="material-symbols-rounded forecast-col__val-icon">water_drop</span><span class="forecast-col__precip-value">--</span></div>
-          <div class="forecast-col__cloud"><span class="material-symbols-rounded forecast-col__val-icon">cloud</span><span class="forecast-col__cloud-value">--</span></div>
-        </div>
-      </div>
-      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
-    `;
-  } else if (sensor.type === "condition" || sensor.type === "text") {
-    const iconFile = sensorKey.replace(/_/g, "-");
-    card.innerHTML = `
-      <div class="weather-card__header weather-card__header--condition">
-        <span class="weather-card__label">${sensor.name}</span>
-      </div>
-      <div class="weather-card__value-wrap weather-card__value-wrap--condition">
-        ${
-          sensor.type === "condition"
-            ? `
-        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img weather-card__icon--hidden" id="${sensorKey}-icon-img" src="" alt="">
-        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-fallback" src="weather_icons/not-available.svg" alt="">
-        `
-            : `
-        <img class="weather-card__icon weather-card__icon--condition weather-card__icon--img" id="${sensorKey}-icon-img" src="weather_icons/${iconFile}.svg" alt="">
-        `
-        }
-        <span class="weather-card__value weather-card__value--condition" id="${sensorKey}-value">--</span>
-      </div>
-      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
-    `;
-  } else {
-    card.innerHTML = `
-      <div class="weather-card__header">
-        <span class="weather-card__icon material-symbols-rounded">${resolveIcon(sensor.icon)}</span>
-        <span class="weather-card__label">${sensor.name}</span>
-      </div>
-      <div class="weather-card__value-wrap">
-        <span class="weather-card__value" id="${sensorKey}-value">--</span>
-        <span class="weather-card__unit" id="${sensorKey}-unit"></span>
-      </div>
-      <p class="weather-card__updated" id="${sensorKey}-updated">Oczekiwanie na dane...</p>
-      <div class="weather-card__chart">
-        <canvas id="chart-${sensorKey}" aria-label="${sensor.name} — wykres z ostatnich ${sensor.history_hours ?? HISTORY_HOURS} godzin" role="img"></canvas>
-      </div>
-    `;
-  }
-
-  return card;
-}
-
-function createChart(canvasId, parameter, color, decimals, unit) {
-  const ctx = document.getElementById(canvasId).getContext("2d");
-
-  return new Chart(ctx, {
-    type: "line",
-    data: {
-      datasets: [
-        {
-          data: [],
-          borderColor: color,
-          backgroundColor: color + "22",
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0.3,
-          fill: true,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 400 },
-      // Points are stored as { x: epoch ms, y } already sorted by time, so
-      // Chart.js can skip parsing and decimate long histories before drawing.
-      parsing: false,
-      normalized: true,
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { display: false },
-        decimation: {
-          enabled: true,
-          algorithm: "lttb",
-          samples: CHART_DECIMATION_SAMPLES,
-          threshold: 2 * CHART_DECIMATION_SAMPLES, // default would be 4x canvas width
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)} ${unit}`,
-            title: (items) => formatTimestamp(items[0].raw.x),
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: "time",
-          time: { unit: "hour", tooltipFormat: "HH:mm", displayFormats: { hour: "HH:mm" } },
-          grid: { color: getCssVar("--color-border") },
-          ticks: {
-            font: { family: "JetBrains Mono", size: 11 },
-            color: getCssVar("--color-text-secondary"),
-            maxTicksLimit: 6,
-          },
-        },
-        y: {
-          grid: { color: getCssVar("--color-border") },
-          ticks: {
-            font: { family: "JetBrains Mono", size: 11 },
-            color: getCssVar("--color-text-secondary"),
-            callback: function (value) {
-              return Number(value).toFixed(decimals);
-            },
-          },
-          afterFit(scale) {
-            scale.width = 52;
-          },
-        },
-      },
-    },
-  });
-}
-
-function updateChartTheme() {
-  const border = getCssVar("--color-border");
-  const tick = getCssVar("--color-text-secondary");
-  Object.values(charts).forEach((c) => {
-    c.options.scales.x.grid.color = border;
-    c.options.scales.y.grid.color = border;
-    c.options.scales.x.ticks.color = tick;
-    c.options.scales.y.ticks.color = tick;
-    c.update("none"); // colours only: no need to animate every chart
-  });
-}
-
-function updateCard(parameter, value, unit, timestamp, icon) {
-  const sensor = sensorsConfig[parameter];
-  if (!sensor || sensor.type === "alerts") return;
-
-  const valueEl = document.getElementById(`${parameter}-value`);
-  const updatedEl = document.getElementById(`${parameter}-updated`);
-  if (updatedEl) updatedEl.textContent = formatUpdated(timestamp);
-
-  if (sensor.type === "forecast") {
-    const container = document.getElementById(`${parameter}-forecast`);
-    if (!container || !Array.isArray(value)) return;
-    const items = value.slice(0, 5); // take first 5 forecast periods
-    const cols = container.children;
-    for (let i = 0; i < Math.min(items.length, cols.length); i++) {
-      const item = items[i];
-      const col = cols[i];
-      const dt = new Date(item.datetime);
-      col.querySelector(".forecast-col__day").textContent = getPolishDayAbbr(dt);
-      col.querySelector(".forecast-col__period").textContent = item.is_daytime ? "dzień" : "noc";
-      const img = col.querySelector(".forecast-col__icon");
-      img.src = getConditionSvgPath(item.condition, item.datetime, item.is_daytime);
-      img.alt = item.condition;
-      col.querySelector(".forecast-col__temp-value").textContent =
-        item.temperature != null ? `${Math.round(item.temperature)}°C` : "--";
-      col.querySelector(".forecast-col__precip-value").textContent =
-        item.precipitation != null ? `${Math.round(item.precipitation)} mm` : "--";
-      col.querySelector(".forecast-col__cloud-value").textContent =
-        item.cloud_coverage != null ? `${Math.round(item.cloud_coverage)}%` : "--";
-      col.querySelector(".forecast-col__wind-value").textContent =
-        item.wind_speed != null ? `${Math.round(item.wind_speed)} km/h` : "--";
-    }
-    // Reset remaining columns to placeholder state
-    for (let i = items.length; i < cols.length; i++) {
-      const col = cols[i];
-      col.querySelector(".forecast-col__day").textContent = "--";
-      col.querySelector(".forecast-col__period").textContent = "--";
-      col.querySelector(".forecast-col__icon").src = "";
-      col.querySelector(".forecast-col__icon").alt = "";
-      col.querySelector(".forecast-col__temp-value").textContent = "--";
-      col.querySelector(".forecast-col__precip-value").textContent = "--";
-      col.querySelector(".forecast-col__cloud-value").textContent = "--";
-      col.querySelector(".forecast-col__wind-value").textContent = "--";
-    }
-  } else if (sensor.type === "condition" || sensor.type === "text") {
-    if (valueEl) valueEl.textContent = value ?? "—";
-  } else {
-    if (valueEl) valueEl.textContent = Number(value).toFixed(sensor.round ?? 1);
-    const unitEl = document.getElementById(`${parameter}-unit`);
-    if (unitEl) unitEl.textContent = unit;
-  }
-
-  if (sensor.type === "condition") {
-    const iconField = icon || value;
-    conditionIconMap[parameter] = iconField;
-    const img = document.getElementById(`${parameter}-icon-img`);
-    const fallback = document.getElementById(`${parameter}-icon-fallback`);
-    if (value) {
-      if (img) {
-        img.src = getConditionSvgPath(iconField, timestamp);
-        img.alt = value;
-        img.classList.remove("weather-card__icon--hidden");
-      }
-      if (fallback) fallback.classList.add("weather-card__icon--hidden");
-    } else {
-      if (img) img.classList.add("weather-card__icon--hidden");
-      if (fallback) fallback.classList.remove("weather-card__icon--hidden");
-    }
-  }
-}
-
-function historyWindowMs(parameter) {
-  return (sensorsConfig[parameter]?.history_hours ?? HISTORY_HOURS) * 60 * 60 * 1000;
-}
-
-// Keeps the last `history_hours` of data, measured from the newest point so
-// the window is exactly what the backend would return for the same sensor.
-function trimChartData(parameter, data) {
-  if (data.length === 0) return;
-  const cutoff = data[data.length - 1].x - historyWindowMs(parameter);
-  while (data.length && data[0].x < cutoff) data.shift();
-}
-
-function sourcePoints(parameter) {
-  chartPoints[parameter] ??= charts[parameter].data.datasets[0].data;
-  return chartPoints[parameter];
-}
-
-function setChartData(parameter, data, mode) {
-  chartPoints[parameter] = data;
-  charts[parameter].data.datasets[0].data = data; // through the accessor if decimated
-  charts[parameter].update(mode);
-}
-
-function appendChartPoint(parameter, value, timestamp) {
-  if (!charts[parameter]) return;
-  const data = sourcePoints(parameter);
-  data.push({ x: Date.parse(timestamp), y: value });
-  trimChartData(parameter, data);
-  setChartData(parameter, data, "none");
-}
-
-// Card values for every sensor in one request; histories are only for charts.
-async function loadCurrent() {
-  try {
-    const current = await getJson("/current");
-    for (const [parameter, reading] of Object.entries(current)) {
-      const sensor = sensorsConfig[parameter];
-      if (!reading || !sensor) continue;
-      if (sensor.type === "condition" || sensor.type === "text") {
-        updateCard(parameter, reading.value_str, null, reading.timestamp, reading.icon);
-      } else if (charts[parameter]) {
-        updateCard(parameter, reading.value, reading.unit, reading.timestamp);
-      }
-    }
-  } catch (err) {
-    console.error("[Current] Error fetching current readings:", err);
-  }
-}
-
-async function loadHistory(parameter) {
-  const chart = charts[parameter];
-  if (!chart) return;
-  try {
-    const hours = sensorsConfig[parameter]?.history_hours ?? HISTORY_HOURS;
-    const history = await getJson(`/history/${parameter}?hours=${hours}`);
-    const points = history.map((r) => ({ x: Date.parse(r.timestamp), y: r.value }));
-    const newest = points.length > 0 ? points[points.length - 1].x : -Infinity;
-    // The WebSocket is open while this request is in flight: keep the live
-    // points that are newer than the history instead of overwriting them.
-    const live = sourcePoints(parameter).filter((p) => p.x > newest);
-    const data = points.concat(live);
-    trimChartData(parameter, data);
-    setChartData(parameter, data, undefined);
-  } catch (err) {
-    console.error(`[History] Error fetching ${parameter}:`, err);
-  }
-}
-
-function chartSensorKeys() {
-  return Object.keys(charts);
-}
-
-function setConnectionStatus(connected) {
-  const statusEl = document.getElementById("connection-status");
-  if (!statusEl) return;
-  statusEl.className = `status ${connected ? "status--connected" : "status--disconnected"}`;
-  const label = statusEl.querySelector(".status__label");
-  if (label) label.textContent = connected ? "Połączono" : "Rozłączono";
-}
-
-// 5 s, 10 s, 20 s, 40 s, 60 s, 60 s ... with ±20 % jitter so clients do not
-// reconnect in lockstep after an outage.
-function reconnectDelay(attempt) {
-  const base = Math.min(WS_RECONNECT_BASE_MS * 2 ** attempt, WS_RECONNECT_MAX_MS);
-  return base * (1 + (Math.random() * 2 - 1) * WS_RECONNECT_JITTER);
-}
-
-function scheduleReconnect() {
-  if (wsState.reconnectTimer) return;
-  const delay = reconnectDelay(wsState.reconnectAttempt);
-  wsState.reconnectAttempt += 1;
-  wsState.reconnectTimer = setTimeout(() => {
-    wsState.reconnectTimer = null;
-    connectWebSocket();
-  }, delay);
-}
-
-// Tab became visible / browser back online: do not wait out the backoff.
-function reconnectNow() {
-  const state = wsState.socket?.readyState;
-  if (state === WS_STATE_OPEN || state === WS_STATE_CONNECTING) return;
-  if (wsState.reconnectTimer) {
-    clearTimeout(wsState.reconnectTimer);
-    wsState.reconnectTimer = null;
-  }
-  wsState.reconnectAttempt = 0;
-  connectWebSocket();
-}
-
-// Whatever was pushed while disconnected is gone: reload cards, charts,
-// alerts and the forecast so the dashboard shows no silent gap.
-async function backfillAfterReconnect() {
-  await Promise.all([
-    loadCurrent(),
-    ...chartSensorKeys().map(loadHistory),
-    loadAlerts(),
-    loadForecast(),
-  ]);
-}
-
-function connectWebSocket() {
-  // Only the very first attempt (page load, initial requests in flight) skips
-  // the backfill; if that attempt fails, the first successful open reloads
-  // everything the failed initial requests could not.
-  const isFirstAttempt = !wsState.attempted;
-  wsState.attempted = true;
-  const socket = new WebSocket(WS_URL);
-  wsState.socket = socket;
-
-  socket.onopen = () => {
-    setConnectionStatus(true);
-    wsState.reconnectAttempt = 0;
-    if (!isFirstAttempt) backfillAfterReconnect();
-  };
-
-  socket.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.parameter === "alerts") {
-        handleAlertUpdate({
-          value: data.value,
-          valid_to: data.valid_to,
-          level: data.level,
-          timestamp: data.timestamp,
-          updatedText: formatUpdated(data.timestamp),
-        });
-      } else if (data.parameter === "sun") {
-        if (data.value === "above_horizon" || data.value === "below_horizon") {
-          sunState.value = data.value;
-          rerenderConditionIcons();
-        }
-      } else {
-        updateCard(data.parameter, data.value, data.unit, data.timestamp, data.icon);
-        appendChartPoint(data.parameter, data.value, data.timestamp);
-      }
-    } catch (e) {
-      console.warn("[WS] Message parse error:", e);
-    }
-  };
-
-  socket.onclose = () => {
-    if (socket !== wsState.socket) return; // superseded by reconnectNow(); ignore
-    setConnectionStatus(false);
-    scheduleReconnect();
-  };
-
-  socket.onerror = (err) => {
-    console.error("[WS] Error:", err);
-    socket.close();
-  };
-}
-
-const THEME_STORAGE_KEY = "theme";
-// Ligatures the toggle switches between (must be in the Material Symbols subset).
-const THEME_ICONS = { dark: "light_mode", light: "dark_mode" };
-
-function readStoredTheme() {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === "dark" || stored === "light" ? stored : null;
-  } catch {
-    return null; // storage disabled (private mode, blocked site data)
-  }
-}
-
-function storeTheme(theme) {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    /* preference simply does not persist */
-  }
-}
-
-// The CSS already renders the OS preference before this runs (no flash); the
-// attribute set here only matters for an explicit choice, which is persisted.
-function initThemeToggle() {
-  const btn = document.getElementById("theme-toggle");
-  const html = document.documentElement;
-  const systemDark = matchMedia("(prefers-color-scheme: dark)");
-  let theme = readStoredTheme() ?? (systemDark.matches ? "dark" : "light");
-
-  const applyTheme = () => {
-    html.setAttribute("data-theme", theme);
-    btn.querySelector(".material-symbols-rounded").textContent = THEME_ICONS[theme];
-    btn.setAttribute("aria-label", theme === "dark" ? "Włącz jasny motyw" : "Włącz ciemny motyw");
-  };
-  applyTheme();
-
-  systemDark.addEventListener?.("change", (event) => {
-    if (readStoredTheme()) return; // an explicit choice wins over the OS
-    theme = event.matches ? "dark" : "light";
-    applyTheme();
-    updateChartTheme();
-  });
-
-  btn.addEventListener("click", () => {
-    theme = theme === "dark" ? "light" : "dark";
-    storeTheme(theme);
-    applyTheme();
-    updateChartTheme();
-  });
-}
-
-async function loadSensors() {
-  const res = await fetch(`${API_BASE}/sensors`);
-  if (!res.ok) throw new Error(`Failed to load sensors: HTTP ${res.status}`);
-  return res.json();
-}
-
-async function initAnalytics() {
-  try {
-    const res = await fetch(`${API_BASE}/analytics`);
-    if (!res.ok) return;
-    const { host, id } = await res.json();
+    const { host, id } = await getJson("/analytics");
     if (host && id) {
       const s = document.createElement("script");
       s.src = `${host.replace(/\/+$/, "")}/script.js`;
@@ -782,35 +38,44 @@ async function initAnalytics() {
   }
 }
 
-function registerServiceWorker() {
+export function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch((err) => {
     console.warn("[SW] Registration failed:", err);
   });
 }
 
-async function init() {
+function showGridError(grid, message) {
+  const error = document.createElement("p");
+  error.className = "grid__error";
+  error.setAttribute("role", "alert");
+  error.textContent = message;
+  grid.replaceChildren(error);
+}
+
+export async function init() {
   // Independent of the API being reachable: an offline visit must still get
   // the worker so the next one can use the precached shell.
   registerServiceWorker();
   initThemeToggle();
-  sensorsConfig = await loadSensors();
   const grid = document.getElementById("weather-grid");
 
-  let idx = 0;
-  for (const [key, sensor] of Object.entries(sensorsConfig)) {
-    grid.appendChild(createCard(key, sensor, idx));
-    if (
-      sensor.type !== "condition" &&
-      sensor.type !== "text" &&
-      sensor.type !== "alerts" &&
-      sensor.type !== "forecast"
-    ) {
-      charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
+  let sensors;
+  try {
+    sensors = await loadSensors();
+  } catch (err) {
+    console.error("[Sensors] Error loading sensor configuration:", err);
+    showGridError(grid, SENSORS_ERROR);
+    return;
+  }
+
+  Object.entries(sensors).forEach(([key, sensor], index) => {
+    grid.appendChild(createCard(key, sensor, index));
+    if (isChartSensor(sensor)) {
+      charts[key] = createChart(`chart-${key}`, sensor.color, sensor.round ?? 1, sensor.unit);
       chartPoints[key] = [];
     }
-    idx++;
-  }
+  });
 
   // Live updates first, so nothing pushed while the initial requests are in
   // flight is lost (loadHistory merges points that arrived in the meantime).
@@ -822,7 +87,7 @@ async function init() {
 
   await Promise.all([
     loadCurrent(),
-    ...chartSensorKeys().map(loadHistory),
+    loadAllHistory(),
     loadForecast(),
     loadAlerts(),
     loadSunState(),
@@ -833,55 +98,14 @@ async function init() {
   document.addEventListener("click", requestNotificationPermission, { once: true });
 }
 
-document.addEventListener("DOMContentLoaded", init);
+/** Clears every module's state (tests call this before each case). */
+export function resetState() {
+  resetSensors();
+  resetIcons();
+  resetCards();
+  resetCharts();
+  resetAlerts();
+  resetWebSocket();
+}
 
-export {
-  getConditionSvgPath,
-  getPolishDayAbbr,
-  rerenderConditionIcons,
-  formatTimestamp,
-  formatUpdated,
-  resolveIcon,
-  getCssVar,
-  createCard,
-  createChart,
-  updateChartTheme,
-  updateCard,
-  appendChartPoint,
-  trimChartData,
-  loadCurrent,
-  loadHistory,
-  loadForecast,
-  connectWebSocket,
-  reconnectNow,
-  backfillAfterReconnect,
-  setConnectionStatus,
-  wsState,
-  initThemeToggle,
-  THEME_STORAGE_KEY,
-  THEME_ICONS,
-  loadSensors,
-  initAnalytics,
-  registerServiceWorker,
-  init,
-  charts,
-  chartPoints,
-  sensorsConfig,
-  alerts,
-  sunState,
-  alertTimerId,
-  ALERT_ICONS,
-  ALERT_GREEN_ICON,
-  showAlertCard,
-  hideAlertCard,
-  updateAlertVisibility,
-  scheduleAlertCheck,
-  handleAlertUpdate,
-  sendAlertNotification,
-  requestNotificationPermission,
-  loadAlerts,
-  loadSunState,
-  API_BASE,
-  HISTORY_HOURS,
-  getJson,
-};
+document.addEventListener("DOMContentLoaded", init);

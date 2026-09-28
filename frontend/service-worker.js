@@ -29,6 +29,11 @@ const WEATHER_ICONS = [
   "windy-variant",
 ];
 
+// ES modules imported by app.js. Import specifiers carry no ?v= (a module
+// graph cannot be cache-busted without a build step), so they are precached
+// here for offline use but served network-first (see MODULE_PATHS below).
+const APP_MODULES = ["alerts", "api", "cards", "charts", "format", "icons", "theme", "ws"];
+
 // The app shell, requested with the exact URLs index.html uses (query string
 // included, otherwise the cache never matches), plus every icon a card can
 // show. "/" doubles as the offline fallback for navigations.
@@ -36,6 +41,7 @@ const PRECACHE = [
   "/",
   `/style.css?v=${VERSION}`,
   `/app.js?v=${VERSION}`,
+  ...APP_MODULES.map((name) => `/${name}.js`),
   `/manifest.json?v=${VERSION}`,
   `/vendor/chart.umd.min.js?v=${VERSION}`,
   `/vendor/chartjs-adapter-date-fns.bundle.min.js?v=${VERSION}`,
@@ -50,6 +56,12 @@ const PRECACHE = [
 // The sensor configuration is the one API response worth keeping: without it
 // the offline shell cannot even draw the cards. Live data stays uncached.
 const SENSORS_API = "/api/weather/sensors";
+
+// Module imports carry no ?v=, so during a deploy the *old* worker (still in
+// control of the page) would otherwise answer the new app.js?v=N with the
+// old modules from its own cache. Network-first (cheap 304s under no-cache)
+// keeps the module graph consistent; the cached copy is only for offline.
+const MODULE_PATHS = new Set(APP_MODULES.map((name) => `/${name}.js`));
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -86,8 +98,9 @@ function storeInBackground(event, request, response) {
   );
 }
 
-// Static assets are immutable per version (cache-busted URLs), so a cached
+// Cache-busted assets (?v=) and icons are immutable per version, so a cached
 // copy is always right; anything fetched later is stored for offline use.
+// ES modules do not come through here: they are routed network-first.
 async function cacheFirst(event) {
   const cached = await caches.match(event.request);
   if (cached) return cached;
@@ -119,8 +132,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(event, "/"));
     return;
   }
-  if (url.pathname === SENSORS_API) {
-    event.respondWith(networkFirst(event, SENSORS_API));
+  if (url.pathname === SENSORS_API || MODULE_PATHS.has(url.pathname)) {
+    event.respondWith(networkFirst(event, url.pathname));
     return;
   }
   if (url.pathname.startsWith("/api/")) return; // live data is never cached

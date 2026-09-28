@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import vm from "node:vm";
@@ -99,6 +99,20 @@ describe("service worker: install", () => {
     expect(precached.some((url) => url.startsWith("/vendor/chart.umd.min.js?v="))).toBe(true);
     const requests = [...store.get(currentCacheName()).values()].map((v) => v.cachedFrom);
     expect(requests.every((request) => request.cache === "reload")).toBe(true);
+  });
+
+  it("precaches every ES module app.js imports (offline, the import graph must resolve)", async () => {
+    const { listeners, store } = loadWorker();
+    const event = lifecycleEvent();
+    listeners.install(event);
+    await event.settled();
+
+    const precached = new Set(store.get(currentCacheName()).keys());
+    const modules = readdirSync(join(ROOT, "frontend")).filter(
+      (f) => f.endsWith(".js") && f !== "app.js" && f !== "service-worker.js",
+    );
+    expect(modules.length).toBeGreaterThan(0);
+    for (const file of modules) expect(precached, file).toContain(`/${file}`);
   });
 
   it("stays in step with scripts/set_version.sh (round-trip on a copy)", () => {
@@ -212,6 +226,31 @@ describe("service worker: fetch", () => {
     const event = fetchEvent({ url: "/api/weather/sensors" });
     listeners.fetch(event);
     expect(await event.response()).toBe(cachedConfig);
+  });
+
+  it("serves ES modules network-first even when an older copy is cached (deploy consistency)", async () => {
+    const network = { ok: true, clone: vi.fn(() => "new-cards") };
+    const fetch = vi.fn(async () => network);
+    const { listeners, store } = loadWorker({ fetch });
+    store.set("weather-dashboard-v1", new Map([["/cards.js", { stale: true }]]));
+    const event = fetchEvent({ url: "/cards.js" });
+    listeners.fetch(event);
+
+    expect(await event.response()).toBe(network);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await event.waitUntil.mock.calls[0][0];
+    expect(store.get(currentCacheName()).get("/cards.js")).toBe("new-cards");
+  });
+
+  it("falls back to the cached module when offline", async () => {
+    const { listeners, store } = loadWorker({
+      fetch: vi.fn(async () => Promise.reject(new TypeError("offline"))),
+    });
+    const cached = { cached: true };
+    store.set(currentCacheName(), new Map([["/cards.js", cached]]));
+    const event = fetchEvent({ url: "/cards.js" });
+    listeners.fetch(event);
+    expect(await event.response()).toBe(cached);
   });
 
   it("serves a cached static asset without touching the network", async () => {

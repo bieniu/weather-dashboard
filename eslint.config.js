@@ -1,50 +1,36 @@
 import js from "@eslint/js";
+import globals from "globals";
 
 export default [
+  {
+    ignores: ["**/weather_icons/**", "**/icons/**", "frontend/vendor/**"],
+  },
   js.configs.recommended,
   {
-    languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: "module",
-      globals: {
-        document: "readonly",
-        window: "readonly",
-        navigator: "readonly",
-        location: "readonly",
-        fetch: "readonly",
-        getComputedStyle: "readonly",
-        WebSocket: "readonly",
-        console: "readonly",
-        setTimeout: "readonly",
-        setInterval: "readonly",
-        clearInterval: "readonly",
-        clearTimeout: "readonly",
-        localStorage: "readonly",
-        Notification: "readonly",
-        matchMedia: "readonly",
-        Chart: "readonly",
-        caches: "readonly",
-        self: "readonly",
-        URL: "readonly",
-        Request: "readonly",
-        process: "readonly",
-        Event: "readonly",
-        Element: "readonly",
-        HTMLCanvasElement: "readonly",
-        vi: "readonly",
-        describe: "readonly",
-        it: "readonly",
-        expect: "readonly",
-        beforeEach: "readonly",
-        afterEach: "readonly",
-      },
-    },
+    languageOptions: { ecmaVersion: 2022, sourceType: "module" },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "no-console": "off",
     },
   },
   {
-    ignores: ["**/weather_icons/**", "**/icons/**", "frontend/vendor/**"],
+    files: ["frontend/**/*.js"],
+    ignores: ["frontend/service-worker.js"],
+    languageOptions: { globals: { ...globals.browser, Chart: "readonly" } },
+  },
+  {
+    files: ["frontend/service-worker.js"],
+    languageOptions: { sourceType: "script", globals: globals.serviceworker },
+  },
+  {
+    // Frontend tests run in happy-dom, so they also see the browser globals.
+    files: ["tests/**/*.js"],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node, ...globals.vitest, Chart: "readonly" },
+    },
+  },
+  {
+    files: ["scripts/**/*.{js,mjs}", "*.config.js"],
+    languageOptions: { globals: globals.node },
   },
 ];

@@ -22,11 +22,18 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002  # needed at runtime for get_type_hints
 )
 
-from app.config import DEFAULT_HISTORY_HOURS, MAX_HISTORY_HOURS, settings
+from app.config import (
+    DEFAULT_HISTORY_HOURS,
+    MAX_HISTORY_HOURS,
+    SensorConfig,
+    SensorType,
+    settings,
+)
 from app.database import get_db
 from app.models import WeatherReading
 from app.mqtt_client import manager
-from app.schemas import WeatherReadingOut
+from app.ratelimit import client_ip
+from app.schemas import AnalyticsOut, ForecastOut, SunOut, WeatherReadingOut
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
@@ -41,23 +48,27 @@ WS_CLOSE_TRY_AGAIN_LATER = 1013
 _open_ws_by_ip: Counter[str] = Counter()
 
 
-def _ws_client_key(websocket: WebSocket) -> str:
-    cf_ip = websocket.headers.get("cf-connecting-ip")
-    if cf_ip:
-        return cf_ip
-    return websocket.client.host if websocket.client else "unknown"
+async def _latest(db: AsyncSession, parameter: str) -> WeatherReading | None:
+    """Return the newest reading of ``parameter`` (ties go to the highest id)."""
+    stmt = (
+        select(WeatherReading)
+        .where(WeatherReading.parameter == parameter)
+        .order_by(desc(WeatherReading.timestamp), desc(WeatherReading.id))
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 @router.get("/sensors")
-async def get_sensors() -> dict:
+async def get_sensors() -> dict[str, SensorConfig]:
     """Return sensor configuration from config.yaml."""
-    return {key: sensor.model_dump() for key, sensor in settings.sensors.items()}
+    return settings.sensors
 
 
 @router.get("/current", response_model=dict[str, WeatherReadingOut | None])
 async def get_current(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> dict[str, WeatherReading | None]:
     """Return the latest reading for each configured sensor in a single query.
 
     The frontend calls this once at startup (and after a WebSocket reconnect)
@@ -81,7 +92,7 @@ async def get_current(
     stmt = select(WeatherReading).from_statement(union_all(*per_sensor))
     result: dict[str, WeatherReading | None] = dict.fromkeys(settings.sensors)
     for row in (await db.execute(stmt)).scalars():
-        result[str(row.parameter)] = row
+        result[row.parameter] = row
     return result
 
 
@@ -112,7 +123,7 @@ async def get_alerts(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Sequence[WeatherReading]:
     """Return all currently-valid alert readings (valid_to > now), newest first."""
-    alerts_key = settings.alerts_key
+    alerts_key = settings.key_for_type(SensorType.ALERTS)
     if alerts_key is None:
         return []
 
@@ -131,58 +142,35 @@ async def get_alerts(
 @router.get("/sun")
 async def get_sun(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> SunOut:
     """Return the latest sun position reading."""
-    stmt = (
-        select(WeatherReading)
-        .where(WeatherReading.parameter == "sun")
-        .order_by(desc(WeatherReading.timestamp))
-        .limit(1)
-    )
-    row = (await db.execute(stmt)).scalar_one_or_none()
+    row = await _latest(db, "sun")
     if row is None:
         return {"parameter": None, "value": None, "timestamp": None}
-    ts = row.timestamp
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=UTC)
     return {
         "parameter": "sun",
         "value": row.value_str,
-        "timestamp": ts.isoformat(),
+        "timestamp": row.timestamp.isoformat(),
     }
 
 
 @router.get("/forecast")
 async def get_forecast(
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
+) -> ForecastOut:
     """Return the latest forecast data as parsed JSON with server timestamp."""
-    forecast_key = next(
-        (k for k, s in settings.sensors.items() if s.type == "forecast"), None
-    )
-    if forecast_key is None:
+    forecast_key = settings.key_for_type(SensorType.FORECAST)
+    row = None if forecast_key is None else await _latest(db, forecast_key)
+    if row is None or row.value_str is None:
         return {"forecast": [], "timestamp": None}
-
-    stmt = (
-        select(WeatherReading)
-        .where(WeatherReading.parameter == forecast_key)
-        .order_by(desc(WeatherReading.timestamp))
-        .limit(1)
-    )
-    row = (await db.execute(stmt)).scalar_one_or_none()
-    if row is None:
-        return {"forecast": [], "timestamp": None}
-    raw = row.value_str
-    if raw is None:
-        return {"forecast": [], "timestamp": None}
-    ts = row.timestamp
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=UTC)
-    return {"forecast": json.loads(str(raw)), "timestamp": ts.isoformat()}
+    return {
+        "forecast": json.loads(row.value_str),
+        "timestamp": row.timestamp.isoformat(),
+    }
 
 
 @router.get("/analytics")
-async def get_analytics() -> dict:
+async def get_analytics() -> AnalyticsOut:
     """Return Umami analytics config if both host and ID are configured."""
     if settings.umami_host and settings.umami_id:
         return {"host": settings.umami_host, "id": settings.umami_id}
@@ -204,7 +192,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
         return
 
-    key = _ws_client_key(websocket)
+    key = client_ip(websocket.scope)
     if (
         _open_ws_by_ip.total() >= MAX_WS_CONNECTIONS
         or _open_ws_by_ip[key] >= MAX_WS_CONNECTIONS_PER_IP

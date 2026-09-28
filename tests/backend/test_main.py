@@ -6,17 +6,6 @@ import pytest
 from freezegun import freeze_time
 
 
-async def test_cloudflare_ip_middleware_sets_real_ip(
-    async_client,
-) -> None:
-    """The CloudflareIP middleware sets real_ip from Cf-Connecting-IP header."""
-    resp = await async_client.get(
-        "/api/weather/sensors",
-        headers={"Cf-Connecting-IP": "203.0.113.1"},
-    )
-    assert resp.status_code == 200
-
-
 async def test_rate_limit_is_keyed_by_cloudflare_ip(async_client) -> None:
     """Through the real stack, the limiter sees Cf-Connecting-IP per client."""
     from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
@@ -89,14 +78,34 @@ async def test_security_headers_present(async_client, header, value) -> None:
         ("/api/weather/sensors", "no-store"),
         ("/style.css?v=163", "public, max-age=31536000, immutable"),
         ("/vendor/chart.umd.min.js?v=163", "public, max-age=31536000, immutable"),
-        ("/favicon.svg", None),
+        ("/favicon.svg", "no-cache"),
+        ("/app.js", "no-cache"),
     ],
 )
 async def test_cache_control_policy(async_client, path, expected) -> None:
-    """HTML/worker revalidate, API is never stored, ?v= assets are immutable."""
+    """HTML/worker and unversioned files revalidate, API is never stored.
+
+    Only ?v= assets are immutable; an unversioned ES module must not be served
+    stale by the edge next to a new app.js?v=N.
+    """
     resp = await async_client.get(path)
     assert resp.status_code == 200
     assert resp.headers.get("Cache-Control") == expected
+
+
+async def test_existing_cache_control_is_not_overridden() -> None:
+    """A Cache-Control set by the wrapped app wins over the default policy."""
+    from app.main import SecurityHeadersMiddleware  # ty: ignore[unresolved-import]
+    from httpx import ASGITransport, AsyncClient
+    from starlette.responses import PlainTextResponse
+
+    inner = PlainTextResponse("x", headers={"Cache-Control": "max-age=5"})
+    transport = ASGITransport(app=SecurityHeadersMiddleware(inner))
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/favicon.svg")
+
+    assert resp.headers["Cache-Control"] == "max-age=5"
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
 
 
 async def test_missing_versioned_asset_is_not_immutable(async_client) -> None:
@@ -120,16 +129,10 @@ async def test_cors_middleware_allows_origins(async_client) -> None:
 
 
 @pytest.fixture
-def cleanup_env(monkeypatch, db_engine):
+def cleanup_env(monkeypatch, patched_session):
     """Bind cleanup_old_readings to the test DB and stop the loop after N sleeps."""
     import asyncio
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    session_factory = async_sessionmaker(
-        db_engine, expire_on_commit=False, class_=AsyncSession
-    )
-    monkeypatch.setattr("app.main.SessionLocal", session_factory)
     sleeps: list[float] = []
 
     def stop_after(n: int) -> None:
@@ -141,7 +144,7 @@ def cleanup_env(monkeypatch, db_engine):
 
         monkeypatch.setattr(asyncio, "sleep", mock_sleep)
 
-    return session_factory, sleeps, stop_after
+    return patched_session, sleeps, stop_after
 
 
 @freeze_time("2026-06-23 12:00:00", tz_offset=0)
@@ -298,7 +301,7 @@ async def test_log_task_exit_reports_clean_exit(caplog) -> None:
 
 
 async def test_lifespan_starts_and_stops_background_tasks(monkeypatch) -> None:
-    """Startup wires DB init, sun state and both tasks; shutdown cancels them."""
+    """Startup wires logging, DB init and both tasks; shutdown cancels them."""
     import asyncio
     import logging
     from unittest.mock import AsyncMock
@@ -306,10 +309,8 @@ async def test_lifespan_starts_and_stops_background_tasks(monkeypatch) -> None:
     from app import main  # ty: ignore[unresolved-import]
 
     init_db = AsyncMock()
-    load_sun_state = AsyncMock()
     basic_config_calls: list[dict] = []
     monkeypatch.setattr(main, "init_db", init_db)
-    monkeypatch.setattr(main, "_load_sun_state", load_sun_state)
     # Record instead of touching the root logger pytest is capturing from.
     monkeypatch.setattr(
         logging, "basicConfig", lambda **kw: basic_config_calls.append(kw)
@@ -324,7 +325,6 @@ async def test_lifespan_starts_and_stops_background_tasks(monkeypatch) -> None:
     async with main.lifespan(main.app):
         assert [c["level"] for c in basic_config_calls] == [main.settings.log_level]
         init_db.assert_awaited_once()
-        load_sun_state.assert_awaited_once()
         assert set(main.background_tasks) == {"mqtt_listener", "cleanup_old_readings"}
         started = dict(main.background_tasks)
         for name, task in started.items():
