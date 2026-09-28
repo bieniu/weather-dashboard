@@ -7,10 +7,15 @@ process.env.TZ = "UTC";
 
 // The real page markup (vitest runs from the repository root), minus the
 // module script tag, so tests exercise the same DOM the browser gets.
+// Parsed with the DOM (not regexes) so <script> elements are dropped
+// regardless of casing or nesting tricks.
 const INDEX_HTML = readFileSync(join(process.cwd(), "frontend/index.html"), "utf8");
-const bodyMatch = INDEX_HTML.match(/<body[^>]*>([\s\S]*)<\/body>/);
-if (!bodyMatch) throw new Error("frontend/index.html has no <body>…</body> to load into tests");
-const BODY_HTML = bodyMatch[1].replace(/<script[\s\S]*?<\/script>/g, "");
+const indexDocument = new DOMParser().parseFromString(INDEX_HTML, "text/html");
+for (const script of indexDocument.querySelectorAll("script")) script.remove();
+const BODY_HTML = indexDocument.body.innerHTML;
+if (!BODY_HTML.includes('id="weather-grid"')) {
+  throw new Error("frontend/index.html body did not load into the test DOM");
+}
 
 function mockChartInstance() {
   return {
