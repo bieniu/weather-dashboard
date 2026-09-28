@@ -1,5 +1,10 @@
 .env
 .git/
+.omc/
+**/.omc/
+node_modules/
+coverage/
+.coverage
 .gitkeep
 __pycache__/
 *.py[codz]

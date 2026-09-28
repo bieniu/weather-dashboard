@@ -51,6 +51,34 @@ def test_settings_loads_sensors() -> None:
     assert "humidity" in settings.sensors
 
 
+def test_settings_log_level_default() -> None:
+    """log_level defaults to INFO."""
+    from app.config import settings  # ty: ignore[unresolved-import]
+
+    assert settings.log_level == "INFO"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [("info", "INFO"), ("Debug", "DEBUG"), ("WARNING", "WARNING")],
+)
+def test_settings_log_level_is_case_insensitive(raw, expected) -> None:
+    """LOG_LEVEL from .env/compose may be lower-case; it is normalised."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
+
+    settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u", log_level=raw)
+    assert settings.log_level == expected
+
+
+def test_settings_log_level_rejects_unknown_name() -> None:
+    """A non-standard level name fails at startup instead of inside logging."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, mqtt_broker="b", mqtt_user="u", log_level="loud")
+
+
 def test_settings_topic_prefix() -> None:
     """Settings reads topic_prefix from config.yaml."""
     from app.config import settings  # ty: ignore[unresolved-import]

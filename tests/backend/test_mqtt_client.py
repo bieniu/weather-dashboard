@@ -3,6 +3,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from freezegun import freeze_time
 from sqlalchemy import text
 
@@ -906,3 +907,130 @@ async def test_process_forecast_invalid_json(monkeypatch, caplog) -> None:
         await _process_mqtt_message(message)
 
     assert "Payload parse error" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("attempt", "expected_base"),
+    [(0, 5), (1, 10), (2, 20), (3, 40), (4, 60), (10, 60)],
+)
+def test_reconnect_delay_backs_off_with_cap(attempt, expected_base) -> None:
+    """Delay doubles from 5 s, caps at 60 s, and stays within ±20 % jitter."""
+    from app.mqtt_client import _reconnect_delay  # ty: ignore[unresolved-import]
+
+    delay = _reconnect_delay(attempt)
+    assert expected_base * 0.8 <= delay <= expected_base * 1.2
+
+
+@pytest.fixture
+def listener_env(monkeypatch):
+    """Stub aiomqtt.Client and asyncio.sleep; stop the loop after N sleeps."""
+    import asyncio
+
+    from app import mqtt_client as mqtt_mod  # ty: ignore[unresolved-import]
+
+    sleeps: list[float] = []
+
+    def install(client_factory, stop_after: int) -> None:
+        monkeypatch.setattr(mqtt_mod.aiomqtt, "Client", client_factory)
+
+        async def mock_sleep(seconds: float) -> None:
+            sleeps.append(seconds)
+            if len(sleeps) >= stop_after:
+                msg = "break loop"
+                raise asyncio.CancelledError(msg)
+
+        monkeypatch.setattr(asyncio, "sleep", mock_sleep)
+
+    return sleeps, install
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_log"),
+    [
+        ("mqtt", "MQTT connection error"),
+        ("runtime", "Unexpected error in MQTT listener"),
+    ],
+)
+async def test_mqtt_listener_retries_with_growing_delay(
+    listener_env, caplog, error, expected_log
+) -> None:
+    """Both MqttError and unexpected errors are logged and retried with backoff."""
+    import asyncio
+    from contextlib import suppress
+
+    import aiomqtt
+    from app.mqtt_client import mqtt_listener  # ty: ignore[unresolved-import]
+
+    class FailingClient:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            if error == "mqtt":
+                msg = "refused"
+                raise aiomqtt.MqttError(msg)
+            msg = "unexpected"
+            raise RuntimeError(msg)
+
+        async def __aexit__(self, *_exc):
+            return False
+
+    sleeps, install = listener_env
+    install(FailingClient, stop_after=3)
+
+    with caplog.at_level("WARNING"), suppress(asyncio.CancelledError):
+        await mqtt_listener()
+
+    assert len(sleeps) == 3
+    assert sleeps[0] < sleeps[1] < sleeps[2]
+    assert sleeps[2] <= 20 * 1.2
+    assert expected_log in caplog.text
+    assert "Reconnecting to MQTT in" in caplog.text
+
+
+async def test_mqtt_listener_resets_backoff_after_connect(listener_env) -> None:
+    """A successful connection resets the attempt counter to the base delay."""
+    import asyncio
+    from contextlib import suppress
+
+    import aiomqtt
+    from app.mqtt_client import mqtt_listener  # ty: ignore[unresolved-import]
+
+    calls = {"n": 0}
+
+    class EmptyMessages:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FlakyClient:
+        """Fails twice, connects once (no messages), then fails again."""
+
+        def __init__(self, **_kwargs) -> None:
+            self.messages = EmptyMessages()
+
+        async def __aenter__(self):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                return self
+            msg = "refused"
+            raise aiomqtt.MqttError(msg)
+
+        async def __aexit__(self, *_exc):
+            return False
+
+        async def subscribe(self, _topic: str) -> None:
+            pass
+
+    sleeps, install = listener_env
+    install(FlakyClient, stop_after=4)
+
+    with suppress(asyncio.CancelledError):
+        await mqtt_listener()
+
+    # attempts 0, 1 fail -> ~5 s, ~10 s; attempt resets on connect -> ~5 s, then ~10 s
+    assert len(sleeps) == 4
+    assert sleeps[2] < sleeps[1]
+    assert 5 * 0.8 <= sleeps[2] <= 5 * 1.2

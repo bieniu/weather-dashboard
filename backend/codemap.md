@@ -18,7 +18,7 @@ Backend Service Layer — ingests sensor data from an MQTT broker, persists read
   - `app/ratelimit.py` — sliding-window rate limiter middleware (100 req/min per IP, `/api/*` paths only).
   - `app/routers/weather.py` — REST + WebSocket route handlers.
 - **Middleware stack (outer to inner):** CSP (Content-Security-Policy header) → CloudflareIP (real IP from `Cf-Connecting-IP`) → RateLimit (`/api/*` only) → CORS. Starlette treats the middleware added *last* as the outermost layer, so `main.py` adds them in reverse.
-- **DB cleanup:** Background task deletes readings older than 30 days every hour.
+- **DB cleanup:** Background task deletes readings older than 30 days at startup and then every hour; `/health` returns 503 if it or the MQTT listener has died.
 
 ## Flow
 

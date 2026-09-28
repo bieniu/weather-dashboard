@@ -35,7 +35,8 @@ docker compose up
 - Backend mounts `/api/weather/*` router, then serves `../frontend/` as static files at `/`
 - MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
 - WebSocket at `/api/weather/ws` pushes live readings; REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`
-- DB cleanup: deletes readings older than 30d, runs every hour in a background asyncio task
+- DB cleanup: deletes readings older than 30d, runs at startup and then every hour in a background asyncio task; `/health` returns 503 when a background task has died
+- Logging: `LOG_LEVEL` env var (default `INFO`) configures the root logger in `lifespan`
 - DB migrations: `init_db()` in `backend/app/database.py` applies schema migrations from the `_MIGRATIONS` list. When adding a new column to `WeatherReading` model, add it to `_MIGRATIONS` and update `test_init_db_adds_missing_columns` to cover it.
 - Linting: `ruff check backend` (run from root)
 - Formatting: `ruff format backend` (run from root). Ruff selects `ALL` rules with minimal ignores (D203, D213).

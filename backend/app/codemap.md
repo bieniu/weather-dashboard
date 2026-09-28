@@ -10,14 +10,15 @@ Application Core — asynchronous FastAPI server acting as the ingestion, persis
 - **Pydantic Settings (BaseSettings)** loads configuration from `.env` file at module level; `SensorConfig` objects are derived from `config.yaml` and merged into the settings singleton.
 - **SQLAlchemy 2.0 async** with `aiosqlite` — declarative `Base` ORM model, `async_sessionmaker` factory, and `get_db` generator as a FastAPI dependency.
 - **Schema-driven serialization** — `WeatherReadingOut` Pydantic model with `from_attributes` and custom `field_serializer` for UTC-aware ISO 8601 output.
-- **MQTT ingestion via aiomqtt** — persistent `async for` message loop with automatic reconnection on `MqttError`; message dispatch dispatched to handler functions keyed by sensor type (`numeric`, `condition`, `text`, `alerts`, `forecast`).
+- **MQTT ingestion via aiomqtt** — persistent `async for` message loop; any failure (not only `MqttError`) is logged and the client reconnects with capped exponential backoff (5 s doubling to 60 s, ±20 % jitter, reset after a successful connect); message dispatch dispatched to handler functions keyed by sensor type (`numeric`, `condition`, `text`, `alerts`, `forecast`).
 - **Middleware stack** (Starlette `BaseHTTPMiddleware`, listed outer to inner; `main.py` adds them in reverse because the last `add_middleware` call becomes the outermost layer):
   1. `CSPMiddleware` — applies Content-Security-Policy header to all responses.
   2. `CloudflareIPMiddleware` — reads `Cf-Connecting-IP` header to set `request.state.real_ip`.
   3. `RateLimitMiddleware` — sliding-window rate limiter at 100 requests/60s per IP, applied to `/api/*` paths only; WebSocket scopes never reach `BaseHTTPMiddleware.dispatch`.
   4. `CORSMiddleware` — permissive CORS from configured origins.
 - **WebSocket broadcast** — `WebSocketManager` singleton maintains an ephemeral set of connections; broadcast iterates a copy, discarding disconnected clients on send failure; `disconnect()` is idempotent.
-- **Background task** — `cleanup_old_readings()` runs every hour as an asyncio task, deleting `WeatherReading` rows older than 30 days.
+- **Background tasks** — `cleanup_old_readings()` runs at startup and then every hour as an asyncio task, deleting `WeatherReading` rows older than `RETENTION_DAYS` (30); a failing cycle is logged and retried next cycle. Both tasks are registered in `background_tasks` with a done-callback that logs unexpected exits, and `GET /health` returns 503 naming any task that has stopped, so the Docker healthcheck restarts the container.
+- **Logging** — `lifespan` calls `logging.basicConfig` with `settings.log_level` (env `LOG_LEVEL`, default `INFO`) so `app.*` INFO logs are visible alongside uvicorn's.
 - **Schema migration** — `init_db()` calls `Base.metadata.create_all` then applies additive column migrations from a `_MIGRATIONS` list via `ALTER TABLE ADD COLUMN` (idempotent, built-in, no Alembic).
 
 ## Flow

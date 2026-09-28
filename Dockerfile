@@ -19,7 +19,6 @@ COPY frontend/ ./frontend/
 COPY config.yaml ./
 
 RUN addgroup -S appuser && adduser -S -H -G appuser appuser \
-    && apk add --no-cache curl \
     && mkdir -p /data \
     && chown -R appuser:appuser /app /data
 
@@ -37,7 +36,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_URL="sqlite+aiosqlite:////data/weather.db"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD curl --fail http://localhost:8332/health || exit 1
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8332/health', timeout=5)"
 
 EXPOSE 8332
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8332", "--proxy-headers", "--forwarded-allow-ips=127.0.0.1,::1"]

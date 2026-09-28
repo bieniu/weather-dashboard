@@ -1,9 +1,10 @@
 """Application configuration — loading environment variables."""
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -51,10 +52,17 @@ class Settings(BaseSettings):
     scheme: str = "http"
     umami_host: str | None = None
     umami_id: str | None = None
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     topic_prefix: str = _yaml_config["topic_prefix"]
     sensors: dict[str, SensorConfig] = {
         k: SensorConfig(**v) for k, v in _yaml_config["sensors"].items()
     }
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_log_level(cls, value: object) -> object:
+        """Accept ``info``/``Debug`` from .env; logging level names are upper-case."""
+        return value.upper() if isinstance(value, str) else value
 
     @property
     def alerts_key(self) -> str | None:

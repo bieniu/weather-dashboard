@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,9 @@ from .models import WeatherReading
 
 VALID_ALERT_LEVELS = {"yellow", "orange", "red"}
 MAX_ALERT_VALID_HOURS = 48
+RECONNECT_BASE_SECONDS = 5
+RECONNECT_MAX_SECONDS = 60
+RECONNECT_JITTER = 0.2
 
 logger = logging.getLogger(__name__)
 
@@ -243,8 +247,21 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         )
 
 
+def _reconnect_delay(attempt: int) -> float:
+    """Exponential backoff (5, 10, 20, 40, 60, 60, ... s) with ±20 % jitter."""
+    base = min(RECONNECT_BASE_SECONDS * 2**attempt, RECONNECT_MAX_SECONDS)
+    # S311: jitter only spreads reconnects; it is not security-sensitive randomness.
+    jitter = random.uniform(-RECONNECT_JITTER, RECONNECT_JITTER)  # noqa: S311
+    return base * (1 + jitter)
+
+
 async def mqtt_listener() -> None:
-    """Listen for MQTT messages and process incoming readings."""
+    """Listen for MQTT messages and process incoming readings.
+
+    Reconnects with capped exponential backoff after any failure, so a broker
+    outage or an unexpected error never stops ingestion for good.
+    """
+    attempt = 0
     while True:
         try:
             async with aiomqtt.Client(
@@ -259,6 +276,7 @@ async def mqtt_listener() -> None:
                     settings.mqtt_broker,
                     settings.mqtt_port,
                 )
+                attempt = 0
 
                 async for message in client.messages:
                     try:
@@ -269,5 +287,11 @@ async def mqtt_listener() -> None:
                         )
 
         except aiomqtt.MqttError as e:
-            logger.warning("Connection error: %s. Retrying in 5s...", e)
-            await asyncio.sleep(5)
+            logger.warning("MQTT connection error: %s", e)
+        except Exception:
+            logger.exception("Unexpected error in MQTT listener")
+
+        delay = _reconnect_delay(attempt)
+        attempt += 1
+        logger.warning("Reconnecting to MQTT in %.0f s (attempt %d)", delay, attempt)
+        await asyncio.sleep(delay)
