@@ -1,5 +1,6 @@
 """Tests for app.ratelimit — sliding-window rate limiter."""
 
+from collections import deque
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -163,3 +164,49 @@ async def test_cleanup_removes_expired_entries() -> None:
     await middleware.dispatch(trigger_req, trigger_call)
 
     assert "expired_ip" not in middleware._windows
+
+
+async def test_tracked_ips_are_capped_with_lru_eviction(monkeypatch) -> None:
+    """Beyond MAX_TRACKED_IPS the least recently seen key is dropped, not the newest."""
+    from app import ratelimit  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(ratelimit, "MAX_TRACKED_IPS", 3)
+    middleware = ratelimit.RateLimitMiddleware(MagicMock())
+
+    async def hit(ip: str) -> None:
+        request = MagicMock()
+        request.url.path = "/api/weather/sensors"
+        request.state.real_ip = ip
+        call_next = AsyncMock()
+        call_next.return_value = MagicMock(status_code=200)
+        await middleware.dispatch(request, call_next)
+
+    for ip in ("a", "b", "c"):
+        await hit(ip)
+    await hit("a")  # "a" becomes the most recently seen; "b" is now the oldest
+    await hit("d")
+
+    assert list(middleware._windows) == ["c", "a", "d"]
+    assert len(middleware._windows) == 3
+
+
+async def test_expired_hits_leave_the_window_on_next_request() -> None:
+    """Hits older than WINDOW_SECONDS are pruned, so a full window admits again."""
+    import time
+
+    from app import ratelimit  # ty: ignore[unresolved-import]
+
+    middleware = ratelimit.RateLimitMiddleware(MagicMock())
+    stale = time.monotonic() - ratelimit.WINDOW_SECONDS - 1
+    middleware._windows["1.2.3.4"] = deque([stale] * ratelimit.RATE_LIMIT)
+
+    request = MagicMock()
+    request.url.path = "/api/weather/sensors"
+    request.state.real_ip = "1.2.3.4"
+    call_next = AsyncMock()
+    call_next.return_value = MagicMock(status_code=200)
+
+    response = await middleware.dispatch(request, call_next)
+
+    assert response.status_code == 200
+    assert len(middleware._windows["1.2.3.4"]) == 1  # only the fresh hit remains
