@@ -86,11 +86,30 @@ def test_settings_topic_prefix() -> None:
     assert settings.topic_prefix == "weather-dashboard"
 
 
-def test_settings_cors_origins() -> None:
-    """Settings.cors_origins returns expected list of origins."""
-    from app.config import settings  # ty: ignore[unresolved-import]
+def test_settings_allowed_origins_defaults() -> None:
+    """Defaults allow the public origin with and without port plus loopback."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
 
-    origins = settings.cors_origins
-    assert f"{settings.scheme}://{settings.domain}:{settings.port}" in origins
-    assert "http://127.0.0.1:8332" in origins
-    assert len(origins) == 2
+    settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u")
+    assert settings.allowed_origins == [
+        "http://localhost",
+        "http://localhost:8332",
+        "http://localhost:8332",
+        "http://127.0.0.1:8332",
+    ]
+
+
+def test_settings_allowed_origins_behind_tunnel() -> None:
+    """Behind Cloudflare the browser's Origin is https://domain with no port."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
+
+    settings = Settings(
+        _env_file=None,
+        mqtt_broker="b",
+        mqtt_user="u",
+        scheme="https",
+        domain="Pogoda.Example.com",
+        port=8332,
+    )
+    assert settings.allowed_origins[0] == "https://pogoda.example.com"
+    assert "https://pogoda.example.com:8332" in settings.allowed_origins

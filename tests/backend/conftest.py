@@ -74,8 +74,10 @@ async def async_client(
 def _reset_ws_manager() -> None:
     """Clear WebSocket connections and sun state before each test."""
     from app.mqtt_client import manager, sun_state  # ty: ignore[unresolved-import]
+    from app.routers import weather  # ty: ignore[unresolved-import]
 
     manager.active_connections.clear()
+    weather._open_ws_by_ip.clear()
     sun_state["value"] = None
 
 

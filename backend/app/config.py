@@ -73,11 +73,21 @@ class Settings(BaseSettings):
         return None
 
     @property
-    def cors_origins(self) -> list[str]:
-        """Return allowed CORS origins."""
+    def allowed_origins(self) -> list[str]:
+        """Origins accepted for CORS and for WebSocket handshakes.
+
+        Behind the Cloudflare tunnel the browser talks to ``{scheme}://{domain}``
+        on the scheme's default port, so that origin carries no port. The
+        ``{domain}:{port}`` form keeps direct LAN access working, and the
+        loopback entries keep local development working. Browsers send the host
+        lower-cased, hence ``domain.lower()``.
+        """
+        domain = self.domain.lower()
         return [
-            f"{self.scheme}://{self.domain}:{self.port}",
-            "http://127.0.0.1:8332",
+            f"{self.scheme}://{domain}",
+            f"{self.scheme}://{domain}:{self.port}",
+            f"http://localhost:{self.port}",
+            f"http://127.0.0.1:{self.port}",
         ]
 
 

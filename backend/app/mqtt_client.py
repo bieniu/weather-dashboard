@@ -3,9 +3,11 @@
 import asyncio
 import json
 import logging
+import math
 import random
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import aiomqtt
 from sqlalchemy import select
@@ -23,17 +25,79 @@ RECONNECT_BASE_SECONDS = 5
 RECONNECT_MAX_SECONDS = 60
 RECONNECT_JITTER = 0.2
 
+# Payload hardening: anyone who can publish under the topic prefix could
+# otherwise push multi-megabyte payloads that get stored for 30 days and
+# fanned out to every WebSocket client.
+MAX_PAYLOAD_BYTES = 64_000
+MAX_VALUE_STR_LEN = 100  # WeatherReading.value_str is String(100)
+MAX_ICON_LEN = 50  # WeatherReading.icon is String(50)
+MAX_LEVEL_LEN = 20  # WeatherReading.level is String(20)
+MAX_UNIT_LEN = 10  # WeatherReading.unit is String(10)
+MAX_FORECAST_ITEMS = 20  # the frontend renders 5
+
+# A client that stops reading (full TCP buffer) must not stall the MQTT ingest
+# loop, which awaits every broadcast.
+WS_SEND_TIMEOUT_SECONDS = 2.0
+WS_CLOSE_TIMEOUT_SECONDS = 1.0
+
 logger = logging.getLogger(__name__)
+
+
+def _reject_json_constant(name: str) -> NoReturn:
+    """``json.loads`` accepts NaN/Infinity by default; browsers' JSON.parse does not."""
+    msg = f"Non-finite JSON constant: {name}"
+    raise ValueError(msg)
+
+
+def _load_json(raw: object) -> object:
+    """Decode an MQTT payload, refusing non-text and oversized payloads early."""
+    if not isinstance(raw, (bytes, bytearray, str)):
+        msg = f"Unsupported payload type: {type(raw).__name__}"
+        raise TypeError(msg)
+    if len(raw) > MAX_PAYLOAD_BYTES:
+        msg = f"Payload too large: {len(raw)} bytes"
+        raise ValueError(msg)
+    return json.loads(raw, parse_constant=_reject_json_constant)
+
+
+# Everything a hostile payload can make the parsers raise. RecursionError comes
+# from deeply nested JSON, OverflowError from datetime arithmetic on year 9999.
+PAYLOAD_ERRORS = (
+    json.JSONDecodeError,
+    KeyError,
+    ValueError,
+    TypeError,
+    RecursionError,
+    OverflowError,
+)
+
+
+def _parse_json_object(raw: object) -> dict:
+    """Decode a JSON object payload; anything else is a TypeError."""
+    payload = _load_json(raw)
+    if not isinstance(payload, dict):
+        msg = f"Payload is not a JSON object: {type(payload).__name__}"
+        raise TypeError(msg)
+    return payload
+
+
+def _finite_float(value: str | float) -> float:
+    """Convert to float, rejecting NaN/inf (they are not valid JSON on broadcast)."""
+    number = float(value)
+    if not math.isfinite(number):
+        msg = f"Non-finite value: {value!r}"
+        raise ValueError(msg)
+    return number
 
 
 def _parse_alert_payload(
     payload: dict, now: datetime
 ) -> tuple[str, str | None, datetime]:
     """Validate and extract alert fields from an MQTT payload."""
-    value = str(payload["value"])[:100]
+    value = str(payload["value"])[:MAX_VALUE_STR_LEN]
     level_raw = payload.get("level")
     if level_raw is not None:
-        level = str(level_raw)[:20]
+        level = str(level_raw)[:MAX_LEVEL_LEN]
         if level not in VALID_ALERT_LEVELS:
             msg = f"Invalid alert level: {level}"
             raise ValueError(msg)
@@ -74,14 +138,25 @@ class WebSocketManager:
         """Remove a WebSocket connection; a no-op if it is already gone."""
         self.active_connections.discard(websocket)
 
+    async def _send(self, websocket: WebSocket, message: str) -> None:
+        try:
+            await asyncio.wait_for(
+                websocket.send_text(message), WS_SEND_TIMEOUT_SECONDS
+            )
+        except Exception as err:  # noqa: BLE001 - closed, stalled or broken: drop it
+            self.active_connections.discard(websocket)
+            logger.info("Dropping WebSocket client after send failure: %r", err)
+            with suppress(Exception):
+                await asyncio.wait_for(
+                    websocket.close(code=1011), WS_CLOSE_TIMEOUT_SECONDS
+                )
+
     async def broadcast(self, data: dict[str, object]) -> None:
-        """Broadcast JSON data to all connected clients."""
+        """Send JSON data to all clients concurrently; slow clients are dropped."""
         message = json.dumps(data)
-        for connection in self.active_connections.copy():
-            try:
-                await connection.send_text(message)
-            except Exception:  # noqa: BLE001
-                self.active_connections.discard(connection)
+        connections = list(self.active_connections)
+        if connections:
+            await asyncio.gather(*(self._send(ws, message) for ws in connections))
 
 
 manager = WebSocketManager()
@@ -93,14 +168,14 @@ async def _process_sun_message(message: aiomqtt.Message) -> None:
     """Handle a sun position MQTT message, persist to DB and broadcast."""
     now = datetime.now(UTC)
     try:
-        payload = json.loads(message.payload)
+        payload = _parse_json_object(message.payload)
         value = str(payload["value"])
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
+    except PAYLOAD_ERRORS as e:
         logger.warning("Payload parse error on topic %s: %s", SUN_TOPIC, e)
         return
 
     if value not in {"above_horizon", "below_horizon"}:
-        logger.warning("Invalid sun value: %s", value)
+        logger.warning("Invalid sun value: %r", value[:MAX_VALUE_STR_LEN])
         return
 
     reading = WeatherReading(parameter="sun", value_str=value, timestamp=now)
@@ -124,18 +199,28 @@ async def _process_forecast_message(
 ) -> None:
     """Handle a forecast MQTT message, persist to DB and broadcast."""
     try:
-        payload = json.loads(message.payload)
-    except json.JSONDecodeError as e:
+        payload = _load_json(message.payload)
+        if not isinstance(payload, list):
+            msg = "Forecast payload is not a list"
+            raise TypeError(msg)
+        if len(payload) > MAX_FORECAST_ITEMS:
+            logger.info(
+                "Forecast on topic %s has %d items; keeping the first %d",
+                topic,
+                len(payload),
+                MAX_FORECAST_ITEMS,
+            )
+            payload = payload[:MAX_FORECAST_ITEMS]
+        # 1e400 parses to inf without hitting parse_constant; allow_nan=False
+        # turns any non-finite float anywhere in the list into a ValueError.
+        encoded = json.dumps(payload, allow_nan=False)
+    except PAYLOAD_ERRORS as e:
         logger.warning("Payload parse error on topic %s: %s", topic, e)
-        return
-
-    if not isinstance(payload, list):
-        logger.warning("Forecast payload on topic %s is not a list", topic)
         return
 
     reading = WeatherReading(
         parameter=parameter,
-        value_str=json.dumps(payload),
+        value_str=encoded,
         timestamp=now,
     )
     async with SessionLocal() as db:
@@ -187,7 +272,7 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
         return
 
     try:
-        payload = json.loads(message.payload)
+        payload = _parse_json_object(message.payload)
         if sensor_type == "alerts":
             value_str, level, valid_to = _parse_alert_payload(payload, now)
             reading = WeatherReading(
@@ -198,18 +283,22 @@ async def _process_mqtt_message(message: aiomqtt.Message) -> None:
                 timestamp=now,
             )
         elif sensor_type in {"condition", "text"}:
-            value_str = str(payload["value"])
-            icon = str(payload.get("icon", "")) if sensor_type == "condition" else ""
+            value_str = str(payload["value"])[:MAX_VALUE_STR_LEN]
+            icon = (
+                str(payload.get("icon", ""))[:MAX_ICON_LEN]
+                if sensor_type == "condition"
+                else ""
+            )
             reading = WeatherReading(
                 parameter=parameter, value_str=value_str, icon=icon, timestamp=now
             )
         else:
-            value = float(payload["value"])
-            unit = str(payload["unit"])
+            value = _finite_float(payload["value"])
+            unit = str(payload["unit"])[:MAX_UNIT_LEN]
             reading = WeatherReading(
                 parameter=parameter, value=value, unit=unit, timestamp=now
             )
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
+    except PAYLOAD_ERRORS as e:
         logger.warning("Payload parse error on topic %s: %s", topic, e)
         return
 
