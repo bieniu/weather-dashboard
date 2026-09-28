@@ -46,5 +46,5 @@ MQTT Broker ──→ backend/app/ (mqtt_listener)
 - **Single-process architecture** — FastAPI serves both API and frontend static files. No separate frontend server, no reverse proxy required in dev.
 - **Async everywhere** — `asyncio` for MQTT ingestion, DB access (`aiosqlite`), WebSocket push, and background cleanup tasks.
 - **Config-driven sensors** — All sensor definitions live in `config.yaml`; no code changes needed to add/remove sensor types.
-- **No framework on frontend** — Vanilla JS avoids build tooling. Chart.js via CDN for charts, native WebSocket for real-time updates.
+- **No framework on frontend** — Vanilla JS avoids build tooling. Chart.js is vendored into `frontend/vendor/` (copied from npm by `scripts/vendor.mjs`, no runtime CDN), native WebSocket for real-time updates.
 - **Minimal external deps** — MQTT broker is the only required external service. SQLite for persistence, Umami for optional analytics.

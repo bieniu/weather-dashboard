@@ -5,7 +5,7 @@ Client-side SPA — Weather Dashboard UI. Displays real-time sensor readings (te
 
 ## Design
 - **Vanilla JS (ES modules)** — no framework. Single `app.js` (~700 lines) handles all logic: card rendering, WebSocket lifecycle, Chart.js integration, theme toggling, alert management, and forecast display.
-- **Chart.js 4.4.3** (CDN) with `chartjs-adapter-date-fns` for time-axis charts. Each numeric sensor gets a line chart (140px tall, 144-point rolling window, 12-hour history by default). Charts are responsive, themed via CSS custom properties, and animate on new data.
+- **Chart.js 4.5.x** (vendored in `vendor/`, version pinned by `package.json`) with `chartjs-adapter-date-fns` for time-axis charts. Each numeric sensor gets a line chart (140px tall, 144-point rolling window, 12-hour history by default). Charts are responsive, themed via CSS custom properties, and animate on new data.
 - **CSS custom properties** for theming — light/dark mode toggled via `data-theme` attribute on `<html>`. Design tokens control background, surface, text, border, accent, and status colors. Transitions are 0.3s ease.
 - **BEM-like class naming** (`weather-card__value`, `forecast-col__day`, `status--connected`). Layout uses CSS Grid (`auto-fill, minmax(380px, 1fr)`) with a single-column breakpoint at 640px.
 - **Responsive forecast layout** — JS-driven via `updateForecastLayout()`. On resize, it reads `gridTemplateColumns` from the weather-grid; if only 1 column fits (narrow viewport), it adds `.forecast-grid--compact` which switches from 5 to 4 columns and hides the 5th day period with `display: none`.
@@ -43,5 +43,5 @@ Client-side SPA — Weather Dashboard UI. Displays real-time sensor readings (te
   - `GET /sun` — sun state
   - `GET /analytics` — analytics host/ID config
 - **WebSocket** at `/api/weather/ws` — pushes real-time readings as JSON `{ parameter, value, unit, timestamp, icon }`, plus alert and sun state messages.
-- **No build step** — all dependencies loaded from CDN (Chart.js, date adapter, Google Fonts, Material Symbols). Cache-bust via `?v=160` query param on CSS/JS/manifest.
+- **No build step** — Chart.js and the date adapter are served same-origin from `vendor/` (copies refreshed with `npm run vendor`, verified by `npm run vendor:check`); Google Fonts and Material Symbols still come from Google. Cache-bust via `?v=N` query param on CSS/JS/vendor/manifest, rewritten by `scripts/set_version.sh`.
 - **Backend** (FastAPI) mounts frontend as static files at `/` and serves API at `/api/weather/*`.

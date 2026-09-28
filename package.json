@@ -2,7 +2,9 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "test": "vitest run --coverage"
+        "test": "vitest run --coverage",
+        "vendor": "node scripts/vendor.mjs",
+        "vendor:check": "node scripts/vendor.mjs --check"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
@@ -14,5 +16,9 @@
         "stylelint": "^17.15.0",
         "stylelint-config-standard": "^40.0.0",
         "vitest": "^5.0.0"
+    },
+    "dependencies": {
+        "chart.js": "4.5.1",
+        "chartjs-adapter-date-fns": "3.0.0"
     }
 }

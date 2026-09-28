@@ -7,7 +7,8 @@
 backend/           FastAPI async app (Python 3.14, SQLAlchemy + aiosqlite, aiomqtt)
   app/main.py      Entrypoint — `uvicorn app.main:app`
   app/config.py    Reads config.yaml + .env
-frontend/          Vanilla JS + Chart.js (CDN), no build step
+frontend/          Vanilla JS + Chart.js (vendored), no build step
+  vendor/          Chart.js + date adapter copied from node_modules by `npm run vendor`
   weather_icons/   16 SVG weather icons (Meteocons fill style)
 utils/             Icon generation scripts
   generate_icons.py  Generates weather icons from SVGs
@@ -33,6 +34,7 @@ docker compose up
 ## Key points
 
 - Backend mounts `/api/weather/*` router, then serves `../frontend/` as static files at `/`
+- Chart.js and `chartjs-adapter-date-fns` are `dependencies` in `package.json` and their browser bundles live in `frontend/vendor/` (same-origin, CSP `script-src 'self'`). After a version bump run `npm run vendor`; `npm run vendor:check` (CI + pre-commit) fails while the copies are stale.
 - MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
 - WebSocket at `/api/weather/ws` pushes live readings (a browser `Origin` outside `settings.allowed_origins`, or more than `MAX_WS_CONNECTIONS` open handlers / `MAX_WS_CONNECTIONS_PER_IP` per client IP, is refused before `accept()`, which the browser sees as HTTP 403; slow clients are closed after `WS_SEND_TIMEOUT_SECONDS`); REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`
 - MQTT payload limits: `MAX_PAYLOAD_BYTES` (64 kB), non-object JSON and NaN/inf are rejected, strings are cut to their column width, forecasts keep the first `MAX_FORECAST_ITEMS`

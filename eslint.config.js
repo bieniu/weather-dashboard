@@ -41,6 +41,6 @@ export default [
     },
   },
   {
-    ignores: ["**/weather_icons/**", "**/icons/**"],
+    ignores: ["**/weather_icons/**", "**/icons/**", "frontend/vendor/**"],
   },
 ];

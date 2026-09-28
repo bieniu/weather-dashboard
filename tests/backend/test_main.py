@@ -57,6 +57,8 @@ async def test_csp_middleware_adds_header(async_client) -> None:
     assert "Content-Security-Policy" in resp.headers
     csp = resp.headers["Content-Security-Policy"]
     assert "default-src 'self'" in csp
+    assert "script-src 'self';" in csp  # Chart.js is vendored, no CDN host
+    assert "jsdelivr" not in csp
 
 
 async def test_cors_middleware_allows_origins(async_client) -> None:
@@ -295,6 +297,4 @@ def test_build_csp_includes_umami_host(monkeypatch) -> None:
     monkeypatch.setattr(main.settings, "umami_host", "https://umami.example.com")
     csp = main._build_csp()
 
-    assert (
-        "script-src 'self' https://cdn.jsdelivr.net https://umami.example.com;" in csp
-    )
+    assert "script-src 'self' https://umami.example.com;" in csp
