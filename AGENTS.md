@@ -34,7 +34,8 @@ docker compose up
 
 - Backend mounts `/api/weather/*` router, then serves `../frontend/` as static files at `/`
 - MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
-- WebSocket at `/api/weather/ws` pushes live readings; REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`
+- WebSocket at `/api/weather/ws` pushes live readings (a browser `Origin` outside `settings.allowed_origins`, or more than `MAX_WS_CONNECTIONS` open handlers / `MAX_WS_CONNECTIONS_PER_IP` per client IP, is refused before `accept()`, which the browser sees as HTTP 403; slow clients are closed after `WS_SEND_TIMEOUT_SECONDS`); REST at `/api/weather/sensors`, `/api/weather/current`, and `/api/weather/history/{parameter}?hours=N`
+- MQTT payload limits: `MAX_PAYLOAD_BYTES` (64 kB), non-object JSON and NaN/inf are rejected, strings are cut to their column width, forecasts keep the first `MAX_FORECAST_ITEMS`
 - DB cleanup: deletes readings older than 30d, runs at startup and then every hour in a background asyncio task; `/health` returns 503 when a background task has died
 - Logging: `LOG_LEVEL` env var (default `INFO`) configures the root logger in `lifespan`
 - DB migrations: `init_db()` in `backend/app/database.py` applies schema migrations from the `_MIGRATIONS` list, then creates any index declared on the models that the existing table lacks (`create_all` never touches existing tables). When adding a new column to `WeatherReading`, add it to `_MIGRATIONS`; a new `Index` in `__table_args__` needs no migration entry. Extend `test_init_db_adds_missing_columns_and_indexes` either way.
@@ -97,11 +98,11 @@ Failing any of these must be fixed before the implementation is complete.
 
 | File | What it covers |
 |---|---|
-| `test_config.py` | `SensorConfig`, `Settings` (sensors, prefix, CORS) |
+| `test_config.py` | `SensorConfig`, `Settings` (sensors, prefix, allowed origins, log level) |
 | `test_database.py` | Table creation, column + index migrations, SQLite pragmas, cleanup query plan, `get_db` |
 | `test_models.py` | ORM creation, default timestamp, declared indexes |
 | `test_schemas.py` | `WeatherReadingOut` serialization, tz handling, nullables |
-| `test_mqtt_client.py` | Topic map, `WebSocketManager`, `_process_mqtt_message` (numeric, condition, error paths), broadcast |
+| `test_mqtt_client.py` | Topic map, `WebSocketManager` (concurrent broadcast, stalled-client drop), `_process_mqtt_message` (numeric, condition, error paths, payload limits), reconnect backoff |
 | `test_ratelimit.py` | Rate limiter unit tests (pass, 429, non-API bypass, cleanup, per-IP isolation) |
 | `test_routers.py` | REST endpoints (`/sensors`, `/current`, `/history`), sensor structure |
 | `test_main.py` | Middleware through the real stack (per-IP rate limit via `Cf-Connecting-IP`, static bypass, CSP, CORS), DB cleanup task |

@@ -89,7 +89,8 @@ async def test_get_history_hours_bounds(async_client, hours, status) -> None:
     assert resp.status_code == status
 
 
-def _websocket_scope() -> dict:
+def _websocket_scope(origin: str | None = None) -> dict:
+    headers = [] if origin is None else [(b"origin", origin.encode())]
     return {
         "type": "websocket",
         "asgi": {"version": "3.0"},
@@ -98,7 +99,7 @@ def _websocket_scope() -> dict:
         "raw_path": b"/api/weather/ws",
         "root_path": "",
         "query_string": b"",
-        "headers": [],
+        "headers": headers,
         "client": ("127.0.0.1", 12345),
         "server": ("test", 80),
         "subprotocols": [],
@@ -135,6 +136,78 @@ async def test_websocket_endpoint_tracks_connection_lifecycle() -> None:
     # connect handshake (0), then keep-alive text and disconnect while registered (1, 1)
     assert connections_at_receive == [0, 1, 1]
     assert manager.active_connections == set()
+
+
+async def _handshake(scope: dict) -> list[dict]:
+    """Drive the WS endpoint through connect + immediate disconnect; return sends."""
+    from app.main import app  # ty: ignore[unresolved-import]
+
+    incoming = [
+        {"type": "websocket.connect"},
+        {"type": "websocket.disconnect", "code": 1000},
+    ]
+    sent: list[dict] = []
+
+    async def receive() -> dict:
+        return incoming.pop(0)
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    await app(scope, receive, send)
+    return sent
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["http://localhost:8332", "http://127.0.0.1:8332", "http://localhost"],
+)
+async def test_websocket_accepts_allowed_origin(origin) -> None:
+    """Origins from settings.allowed_origins complete the handshake."""
+    sent = await _handshake(_websocket_scope(origin=origin))
+    assert sent[0]["type"] == "websocket.accept"
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["https://evil.example", "http://localhost:9999", "null"],
+)
+async def test_websocket_rejects_foreign_origin(origin) -> None:
+    """A cross-site Origin is refused with 1008 before the socket is accepted."""
+    from app.mqtt_client import manager  # ty: ignore[unresolved-import]
+
+    sent = await _handshake(_websocket_scope(origin=origin))
+    assert sent == [{"type": "websocket.close", "code": 1008, "reason": ""}]
+    assert manager.active_connections == set()
+
+
+async def test_websocket_rejects_when_global_cap_reached(monkeypatch) -> None:
+    """Beyond MAX_WS_CONNECTIONS the handshake is refused (ASGI close 1013)."""
+    from app.routers import weather  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(weather, "MAX_WS_CONNECTIONS", 2)
+    weather._open_ws_by_ip.update({"10.0.0.1": 1, "10.0.0.2": 1})
+
+    sent = await _handshake(_websocket_scope())
+    assert sent == [{"type": "websocket.close", "code": 1013, "reason": ""}]
+    assert weather._open_ws_by_ip.total() == 2  # refused handshake not counted
+
+
+async def test_websocket_rejects_when_per_ip_cap_reached(monkeypatch) -> None:
+    """One IP cannot use more than MAX_WS_CONNECTIONS_PER_IP slots."""
+    from app.routers import weather  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(weather, "MAX_WS_CONNECTIONS_PER_IP", 1)
+    weather._open_ws_by_ip["127.0.0.1"] = 1  # the scope's client address
+
+    refused = await _handshake(_websocket_scope())
+    assert refused == [{"type": "websocket.close", "code": 1013, "reason": ""}]
+
+    other = _websocket_scope()
+    other["headers"] = [(b"cf-connecting-ip", b"203.0.113.9")]
+    accepted = await _handshake(other)
+    assert accepted[0]["type"] == "websocket.accept"
+    assert weather._open_ws_by_ip == {"127.0.0.1": 1}  # released on disconnect
 
 
 async def test_websocket_endpoint_unregisters_on_unexpected_error() -> None:

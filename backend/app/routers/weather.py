@@ -1,6 +1,7 @@
 """REST + WebSocket router for weather data."""
 
 import json
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
@@ -28,6 +29,23 @@ from app.mqtt_client import manager
 from app.schemas import WeatherReadingOut
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
+
+MAX_WS_CONNECTIONS = 100
+MAX_WS_CONNECTIONS_PER_IP = 5
+WS_CLOSE_POLICY_VIOLATION = 1008
+WS_CLOSE_TRY_AGAIN_LATER = 1013
+
+# Open WebSocket handlers per client IP. Counted synchronously *before* accept()
+# (no await in between), so concurrent handshakes cannot overshoot the caps, and
+# a client the broadcaster already dropped still counts until its handler ends.
+_open_ws_by_ip: Counter[str] = Counter()
+
+
+def _ws_client_key(websocket: WebSocket) -> str:
+    cf_ip = websocket.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip
+    return websocket.client.host if websocket.client else "unknown"
 
 
 @router.get("/sensors")
@@ -160,12 +178,36 @@ async def get_analytics() -> dict:
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
-    """WebSocket — push new readings to frontend clients."""
-    await manager.connect(websocket)
+    """WebSocket — push new readings to frontend clients.
+
+    Browsers always send ``Origin``; a value outside the allowed list is a
+    cross-site connection attempt and is refused. Non-browser clients without
+    the header are accepted (the data is public and read-only). A close before
+    ``accept()`` reaches the browser as a failed handshake (HTTP 403); the ASGI
+    close codes only distinguish the reasons in logs and tests.
+    """
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in settings.allowed_origins:
+        await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
+        return
+
+    key = _ws_client_key(websocket)
+    if (
+        _open_ws_by_ip.total() >= MAX_WS_CONNECTIONS
+        or _open_ws_by_ip[key] >= MAX_WS_CONNECTIONS_PER_IP
+    ):
+        await websocket.close(code=WS_CLOSE_TRY_AGAIN_LATER)
+        return
+    _open_ws_by_ip[key] += 1
+
     try:
+        await manager.connect(websocket)
         while True:
             await websocket.receive_text()  # keep-alive / ping
     except WebSocketDisconnect:
         pass
     finally:
         manager.disconnect(websocket)
+        _open_ws_by_ip[key] -= 1
+        if _open_ws_by_ip[key] <= 0:
+            del _open_ws_by_ip[key]

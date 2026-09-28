@@ -10,7 +10,7 @@ API Router Layer — HTTP endpoint handlers and WebSocket endpoint for weather d
 - **Stateless handlers** — all per-request state (DB session) injected via `Depends(get_db)`.
 - **Read-only REST** — no POST/PUT/DELETE endpoints; data enters the system exclusively through MQTT ingestion (`mqtt_client.py`). The `/forecast` and `/sun` endpoints use manual dict serialisation (including UTC timezone handling) instead of Pydantic `response_model`.
 - **Response serialisation** — numeric sensor endpoints use Pydantic `response_model` (`WeatherReadingOut`) with `from_attributes=True` for ORM-to-schema coercion; `/forecast` and `/sun` return hand-constructed dicts with ISO 8601 timestamps.
-- **WebSocket** delegates lifecycle to `WebSocketManager` (connection tracking, broadcast) from `mqtt_client.py`; the endpoint only handles accept, a blocking receive loop for keep-alive, and unregisters the client in a `finally` block.
+- **WebSocket** delegates lifecycle to `WebSocketManager` (connection tracking, broadcast) from `mqtt_client.py`; the endpoint refuses a browser `Origin` outside `settings.allowed_origins` (ASGI close 1008) and handshakes beyond `MAX_WS_CONNECTIONS` in total or `MAX_WS_CONNECTIONS_PER_IP` per client IP (ASGI close 1013, counted in `_open_ws_by_ip` before `accept()`); a pre-accept close reaches the browser as HTTP 403. Accepted clients run a blocking receive loop for keep-alive and are unregistered (and un-counted) in a `finally` block.
 - **Config-driven sensor enumeration** — `/sensors` and `/current` iterate `settings.sensors`; `/history` and `/alerts` validate parameters against it.
 - **No middleware or auth** — rate limiting is applied at the app level (`RateLimitMiddleware`), not per-route.
 
