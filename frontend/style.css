@@ -2,6 +2,7 @@
    Design tokens — theme light / dark
    ============================================= */
 :root {
+  color-scheme: light; /* dark blocks below switch native controls/scrollbars */
   --color-bg: #f1f5f9;
   --color-surface: #ffffff;
   --color-text: #0f172a;
@@ -17,12 +18,16 @@
   --font-mono: "JetBrains Mono", monospace;
 
   --header-h: 56px;
-  --grid-gap: 16px;
+  --grid-gap: 16px; /* also baked into the 776px container query (2 * 380px + gap) */
   --card-radius: 8px;
   --card-padding: 16px;
 }
 
+/* Dark tokens apply for an explicit choice (data-theme, set by app.js from
+   localStorage) and, before the script runs, for the OS preference, so a dark
+   user never sees a light flash. Keep both blocks identical. */
 [data-theme="dark"] {
+  color-scheme: dark;
   --color-bg: #0f172a;
   --color-surface: #1e293b;
   --color-text: #f8fafc;
@@ -32,6 +37,21 @@
   --color-accent-subtle: #78350f;
   --color-success: #22c55e;
   --color-error: #ef4444;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-text: #f8fafc;
+    --color-text-secondary: #94a3b8;
+    --color-border: #334155;
+    --color-accent: #f59e0b;
+    --color-accent-subtle: #78350f;
+    --color-success: #22c55e;
+    --color-error: #ef4444;
+  }
 }
 
 /* =============================================
@@ -194,6 +214,10 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
   gap: var(--grid-gap);
+
+  /* Cards adapt to the column count via @container (width < 776px): keep that
+     number equal to 2 * the 380px minimum above + --grid-gap. */
+  container-type: inline-size;
 }
 
 /* =============================================
@@ -440,11 +464,16 @@ body {
   font-size: 0.75rem;
 }
 
-.forecast-grid--compact {
-  grid-template-columns: repeat(4, 1fr);
-}
-.forecast-grid--compact .forecast-col:nth-child(5) {
-  display: none;
+/* A single-column grid (narrower than two 380px cards plus the gap) shows
+   four forecast periods instead of five. */
+@container (width < 776px) {
+  .forecast-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .forecast-col:nth-child(5) {
+    display: none;
+  }
 }
 
 #card-forecast .weather-card__updated {

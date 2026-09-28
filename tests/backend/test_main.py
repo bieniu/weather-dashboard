@@ -59,6 +59,51 @@ async def test_csp_middleware_adds_header(async_client) -> None:
     assert "default-src 'self'" in csp
     assert "script-src 'self';" in csp  # Chart.js is vendored, no CDN host
     assert "jsdelivr" not in csp
+    assert "base-uri 'self';" in csp
+    assert "form-action 'self';" in csp
+    assert "object-src 'none';" in csp
+    assert "connect-src 'self';" in csp  # same-origin WebSocket is covered by 'self'
+    assert "ws:" not in csp
+
+
+@pytest.mark.parametrize(
+    ("header", "value"),
+    [
+        ("X-Content-Type-Options", "nosniff"),
+        ("Referrer-Policy", "strict-origin-when-cross-origin"),
+    ],
+)
+async def test_security_headers_present(async_client, header, value) -> None:
+    """MIME-sniffing and referrer protection headers are set on every response."""
+    for path in ("/", "/api/weather/sensors"):
+        resp = await async_client.get(path)
+        assert resp.headers.get(header) == value
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/", "no-cache"),
+        ("/index.html", "no-cache"),
+        ("/service-worker.js", "no-cache"),
+        ("/api/weather/sensors", "no-store"),
+        ("/style.css?v=163", "public, max-age=31536000, immutable"),
+        ("/vendor/chart.umd.min.js?v=163", "public, max-age=31536000, immutable"),
+        ("/favicon.svg", None),
+    ],
+)
+async def test_cache_control_policy(async_client, path, expected) -> None:
+    """HTML/worker revalidate, API is never stored, ?v= assets are immutable."""
+    resp = await async_client.get(path)
+    assert resp.status_code == 200
+    assert resp.headers.get("Cache-Control") == expected
+
+
+async def test_missing_versioned_asset_is_not_immutable(async_client) -> None:
+    """A 404 for a ?v= URL must not be cached for a year by browsers or the edge."""
+    resp = await async_client.get("/vendor/does-not-exist.js?v=999")
+    assert resp.status_code == 404
+    assert resp.headers.get("Cache-Control") is None
 
 
 async def test_cors_middleware_allows_origins(async_client) -> None:
@@ -291,10 +336,11 @@ async def test_lifespan_starts_and_stops_background_tasks(monkeypatch) -> None:
 
 
 def test_build_csp_includes_umami_host(monkeypatch) -> None:
-    """When analytics is configured, the Umami host is allowed in script-src."""
+    """With analytics configured, the Umami host is allowed for script and beacons."""
     from app import main  # ty: ignore[unresolved-import]
 
     monkeypatch.setattr(main.settings, "umami_host", "https://umami.example.com")
     csp = main._build_csp()
 
     assert "script-src 'self' https://umami.example.com;" in csp
+    assert "connect-src 'self' https://umami.example.com;" in csp  # beacons

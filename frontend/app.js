@@ -708,23 +708,53 @@ function connectWebSocket() {
   };
 }
 
+const THEME_STORAGE_KEY = "theme";
+// Ligatures the toggle switches between (must be in the Material Symbols subset).
+const THEME_ICONS = { dark: "light_mode", light: "dark_mode" };
+
+function readStoredTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === "dark" || stored === "light" ? stored : null;
+  } catch {
+    return null; // storage disabled (private mode, blocked site data)
+  }
+}
+
+function storeTheme(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    /* preference simply does not persist */
+  }
+}
+
+// The CSS already renders the OS preference before this runs (no flash); the
+// attribute set here only matters for an explicit choice, which is persisted.
 function initThemeToggle() {
   const btn = document.getElementById("theme-toggle");
   const html = document.documentElement;
-  let theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  html.setAttribute("data-theme", theme);
+  const systemDark = matchMedia("(prefers-color-scheme: dark)");
+  let theme = readStoredTheme() ?? (systemDark.matches ? "dark" : "light");
 
-  const updateIcon = () => {
-    btn.querySelector(".material-symbols-rounded").textContent =
-      theme === "dark" ? "light_mode" : "dark_mode";
+  const applyTheme = () => {
+    html.setAttribute("data-theme", theme);
+    btn.querySelector(".material-symbols-rounded").textContent = THEME_ICONS[theme];
     btn.setAttribute("aria-label", theme === "dark" ? "Włącz jasny motyw" : "Włącz ciemny motyw");
   };
-  updateIcon();
+  applyTheme();
+
+  systemDark.addEventListener?.("change", (event) => {
+    if (readStoredTheme()) return; // an explicit choice wins over the OS
+    theme = event.matches ? "dark" : "light";
+    applyTheme();
+    updateChartTheme();
+  });
 
   btn.addEventListener("click", () => {
     theme = theme === "dark" ? "light" : "dark";
-    html.setAttribute("data-theme", theme);
-    updateIcon();
+    storeTheme(theme);
+    applyTheme();
     updateChartTheme();
   });
 }
@@ -750,15 +780,6 @@ async function initAnalytics() {
   } catch {
     /* analytics non-critical */
   }
-}
-
-function updateForecastLayout() {
-  const grid = document.getElementById("weather-grid");
-  const forecastGrid = document.querySelector(".forecast-grid");
-  if (!grid || !forecastGrid) return;
-  const tracks = getComputedStyle(grid).gridTemplateColumns;
-  const colCount = tracks.split(" ").length;
-  forecastGrid.classList.toggle("forecast-grid--compact", colCount === 1);
 }
 
 function registerServiceWorker() {
@@ -791,9 +812,6 @@ async function init() {
     idx++;
   }
 
-  updateForecastLayout();
-  window.addEventListener("resize", updateForecastLayout);
-
   // Live updates first, so nothing pushed while the initial requests are in
   // flight is lost (loadHistory merges points that arrived in the meantime).
   connectWebSocket();
@@ -818,7 +836,6 @@ async function init() {
 document.addEventListener("DOMContentLoaded", init);
 
 export {
-  updateForecastLayout,
   getConditionSvgPath,
   getPolishDayAbbr,
   rerenderConditionIcons,
@@ -841,6 +858,8 @@ export {
   setConnectionStatus,
   wsState,
   initThemeToggle,
+  THEME_STORAGE_KEY,
+  THEME_ICONS,
   loadSensors,
   initAnalytics,
   registerServiceWorker,

@@ -50,6 +50,9 @@ docker compose up
 - Both ruff and ty are dev dependencies — install via `uv sync --frozen` from root.
 - Pre-commit wrapper: `prek` (reads `.pre-commit-config.yaml`). Run `prek run --all-files` to run all hooks.
 - `.env` is gitignored; example vars in docker-compose.yml: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`
+- Security headers (`SecurityHeadersMiddleware` in `main.py`): CSP (`script-src`/`connect-src 'self'` + Umami host, `base-uri`, `form-action`, `object-src 'none'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy`; `Cache-Control`: `no-cache` for `/`, `/index.html`, `/service-worker.js`, `no-store` for `/api/*`, `immutable` for `?v=` cache-busted assets.
+- Material Symbols are loaded as a subset (`icon_names=` in `index.html`, alphabetical); any new ligature in `index.html`, `app.js` or a `config.yaml` `icon:` must be added there (`tests/frontend/icons.test.js` checks).
+- Theme: CSS renders the OS preference before JS runs (no flash); an explicit toggle is stored in `localStorage` under `theme`.
 - Deployment: the Cloudflare tunnel is the only public entry point. docker-compose binds 8332 to `127.0.0.1` only, uvicorn runs without `--proxy-headers`, and the client IP for rate limiting / WebSocket caps comes solely from `Cf-Connecting-IP` (falling back to the socket peer). HSTS and HTTPS redirects are configured in Cloudflare, not in the app.
 
 ## Testing

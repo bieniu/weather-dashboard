@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- CACHE_BUST is rewritten by scripts/set_version.sh (together with every ?v= below and VERSION in service-worker.js) -->
 <!-- CACHE_BUST=163 -->
-<html lang="pl" data-theme="light">
+<html lang="pl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -25,8 +25,11 @@
       href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
+    <!-- Subset of Material Symbols: every ligature used in index.html, app.js and
+         config.yaml (`icon:` values) must be listed, alphabetically. Checked by
+         tests/frontend/icons.test.js. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0&icon_names=air,cloud,dark_mode,humidity_percentage,light_mode,speed,thermometer,umbrella,water_drop,waves&display=block"
       rel="stylesheet"
     />
 
