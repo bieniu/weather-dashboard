@@ -46,7 +46,14 @@ beforeEach(() => {
 });
 
 const SENSOR_NUMERIC = {
-  temperature: { name: "Temperatura", type: "numeric", icon: "mdi:thermometer", color: "#E53935", round: 1, unit: "°C" },
+  temperature: {
+    name: "Temperatura",
+    type: "numeric",
+    icon: "mdi:thermometer",
+    color: "#E53935",
+    round: 1,
+    unit: "°C",
+  },
 };
 
 const SENSOR_CONDITION = {
@@ -83,14 +90,18 @@ describe("utils", () => {
   it("getConditionSvgPath resolves partlycloudy to day variant (6-20h)", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-24T12:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-day.svg");
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
+      "weather_icons/partly-cloudy-day.svg",
+    );
     vi.useRealTimers();
   });
 
   it("getConditionSvgPath resolves partlycloudy to night variant (20-6h)", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-24T22:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-night.svg");
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
+      "weather_icons/partly-cloudy-night.svg",
+    );
     vi.useRealTimers();
   });
 
@@ -98,7 +109,9 @@ describe("utils", () => {
     sunState.value = "above_horizon";
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-24T22:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-day.svg");
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
+      "weather_icons/partly-cloudy-day.svg",
+    );
     vi.useRealTimers();
   });
 
@@ -106,7 +119,9 @@ describe("utils", () => {
     sunState.value = "below_horizon";
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-24T12:00:00"));
-    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe("weather_icons/partly-cloudy-night.svg");
+    expect(getConditionSvgPath("mdi:weather-partly-cloudy")).toBe(
+      "weather_icons/partly-cloudy-night.svg",
+    );
     vi.useRealTimers();
   });
 
@@ -239,7 +254,9 @@ describe("updateCard", () => {
     document.getElementById("weather-grid").appendChild(card);
 
     updateCard("temperature", 22.0, "°C", "2025-06-24T15:00:00Z");
-    expect(document.getElementById("temperature-updated").textContent).toMatch(/^Zaktualizowano: 15:00:00$/);
+    expect(document.getElementById("temperature-updated").textContent).toMatch(
+      /^Zaktualizowano: 15:00:00$/,
+    );
   });
 });
 
@@ -285,8 +302,14 @@ describe("chart", () => {
   });
 
   it("updateChartTheme calls update on all charts", () => {
-    const c1 = { options: { scales: { x: { grid: {}, ticks: {} }, y: { grid: {}, ticks: {} } } }, update: vi.fn() };
-    const c2 = { options: { scales: { x: { grid: {}, ticks: {} }, y: { grid: {}, ticks: {} } } }, update: vi.fn() };
+    const c1 = {
+      options: { scales: { x: { grid: {}, ticks: {} }, y: { grid: {}, ticks: {} } } },
+      update: vi.fn(),
+    };
+    const c2 = {
+      options: { scales: { x: { grid: {}, ticks: {} }, y: { grid: {}, ticks: {} } } },
+      update: vi.fn(),
+    };
     charts.a = c1;
     charts.b = c2;
 
@@ -321,7 +344,9 @@ describe("loadHistory", () => {
     });
 
     await loadHistory("temperature");
-    expect(globalThis.fetch).toHaveBeenCalledWith(`${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `${API_BASE}/history/temperature?hours=${HISTORY_HOURS}`,
+    );
     expect(charts.temperature.data.datasets[0].data).toHaveLength(2);
   });
 
@@ -343,7 +368,15 @@ describe("loadHistory", () => {
   });
 
   it("uses per-sensor history_hours when configured in sensor config", async () => {
-    sensorsConfig.water_level = { name: "Woda", type: "numeric", icon: "mdi:waves", color: "#2196F3", round: 0, unit: "cm", history_hours: 48 };
+    sensorsConfig.water_level = {
+      name: "Woda",
+      type: "numeric",
+      icon: "mdi:waves",
+      color: "#2196F3",
+      round: 0,
+      unit: "cm",
+      history_hours: 48,
+    };
     charts.water_level = {
       data: { datasets: [{ data: [] }] },
       update: vi.fn(),
@@ -551,7 +584,12 @@ describe("alert", () => {
     const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    showAlertCard({ value: "burze", level: "yellow", valid_to: "2026-07-18T19:00:00Z", updatedText: "Test" });
+    showAlertCard({
+      value: "burze",
+      level: "yellow",
+      valid_to: "2026-07-18T19:00:00Z",
+      updatedText: "Test",
+    });
     expect(card.style.display).toBe("");
     const img = document.getElementById("alerts-icon-img");
     expect(img.src).toContain("alert-yellow.svg");
@@ -573,7 +611,12 @@ describe("alert", () => {
     const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    showAlertCard({ value: "brak zagrożeń", level: null, valid_to: "2026-07-18T19:00:00Z", updatedText: "Test" });
+    showAlertCard({
+      value: "brak zagrożeń",
+      level: null,
+      valid_to: "2026-07-18T19:00:00Z",
+      updatedText: "Test",
+    });
     expect(card.style.display).toBe("");
     const img = document.getElementById("alerts-icon-img");
     expect(img.src).toContain("alert-green.svg");
@@ -630,16 +673,36 @@ describe("alert", () => {
     const card = createCard("alerts", sensor, 0);
     document.getElementById("weather-grid").appendChild(card);
 
-    handleAlertUpdate({ value: "new", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "2" });
-    handleAlertUpdate({ value: "older", level: "red", valid_to: "2099-01-01T00:00:00Z", timestamp: "1" });
+    handleAlertUpdate({
+      value: "new",
+      level: "yellow",
+      valid_to: "2099-01-01T00:00:00Z",
+      timestamp: "2",
+    });
+    handleAlertUpdate({
+      value: "older",
+      level: "red",
+      valid_to: "2099-01-01T00:00:00Z",
+      timestamp: "1",
+    });
     expect(alerts.length).toBe(2);
     expect(alerts[0].value).toBe("older");
     expect(document.getElementById("alerts-value").textContent).toBe("older");
   });
 
   it("handleAlertUpdate deduplicates by timestamp", () => {
-    handleAlertUpdate({ value: "first", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "same" });
-    handleAlertUpdate({ value: "second", level: "red", valid_to: "2099-01-01T00:00:00Z", timestamp: "same" });
+    handleAlertUpdate({
+      value: "first",
+      level: "yellow",
+      valid_to: "2099-01-01T00:00:00Z",
+      timestamp: "same",
+    });
+    handleAlertUpdate({
+      value: "second",
+      level: "red",
+      valid_to: "2099-01-01T00:00:00Z",
+      timestamp: "same",
+    });
     expect(alerts.length).toBe(1);
     expect(alerts[0].value).toBe("second");
   });
@@ -656,13 +719,20 @@ describe("alert", () => {
   it("sendAlertNotification does nothing when Notification API is unavailable", () => {
     const orig = globalThis.Notification;
     delete globalThis.Notification;
-    expect(() => sendAlertNotification({ value: "test", level: "red", timestamp: "1" })).not.toThrow();
+    expect(() =>
+      sendAlertNotification({ value: "test", level: "red", timestamp: "1" }),
+    ).not.toThrow();
     globalThis.Notification = orig;
   });
 
   it("sendAlertNotification fires Notification with correct title and body", () => {
     Notification.mockClear();
-    sendAlertNotification({ value: "burze", level: "orange", timestamp: "ts1", valid_to: "2099-01-01T00:00:00Z" });
+    sendAlertNotification({
+      value: "burze",
+      level: "orange",
+      timestamp: "ts1",
+      valid_to: "2099-01-01T00:00:00Z",
+    });
     expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
       body: expect.stringMatching(/Pomarańczowy alert: burze\nWażny do: 1 stycznia, \d{2}:\d{2}/),
       tag: "ts1",
@@ -673,7 +743,12 @@ describe("alert", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-23T12:00:00Z"));
     Notification.mockClear();
-    sendAlertNotification({ value: "mgła", level: "yellow", timestamp: "ts2", valid_to: "2026-06-23T15:00:00Z" });
+    sendAlertNotification({
+      value: "mgła",
+      level: "yellow",
+      timestamp: "ts2",
+      valid_to: "2026-06-23T15:00:00Z",
+    });
     const callBody = Notification.mock.calls[0][1].body;
     expect(callBody).toContain("Żółty alert: mgła");
     expect(callBody).toContain("Ważny do:");
@@ -683,7 +758,12 @@ describe("alert", () => {
 
   it("sendAlertNotification uses Zielony label for null level", () => {
     Notification.mockClear();
-    sendAlertNotification({ value: "brak zagrożeń", level: null, timestamp: "ts3", valid_to: "2099-01-01T00:00:00Z" });
+    sendAlertNotification({
+      value: "brak zagrożeń",
+      level: null,
+      timestamp: "ts3",
+      valid_to: "2099-01-01T00:00:00Z",
+    });
     expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
       body: expect.stringMatching(/Zielony alert: brak zagrożeń/),
       tag: "ts3",
@@ -712,13 +792,26 @@ describe("alert", () => {
   });
 
   it("handleAlertUpdate sends notification for new alerts", () => {
-    handleAlertUpdate({ value: "test", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "notif1" });
-    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", expect.objectContaining({ body: expect.stringContaining("test") }));
+    handleAlertUpdate({
+      value: "test",
+      level: "yellow",
+      valid_to: "2099-01-01T00:00:00Z",
+      timestamp: "notif1",
+    });
+    expect(Notification).toHaveBeenCalledWith(
+      "Alert meteorologiczny",
+      expect.objectContaining({ body: expect.stringContaining("test") }),
+    );
   });
 
   it("loadAlerts fetches alerts and populates the array", async () => {
     const apiData = [
-      { value_str: "burze", level: "yellow", valid_to: "2099-01-01T00:00:00Z", timestamp: "2026-06-23T12:00:00Z" },
+      {
+        value_str: "burze",
+        level: "yellow",
+        valid_to: "2099-01-01T00:00:00Z",
+        timestamp: "2026-06-23T12:00:00Z",
+      },
     ];
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -752,7 +845,9 @@ describe("alert", () => {
   it("WS message with alert parameter routes to handleAlertUpdate", () => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () { return wsMock; });
+    globalThis.WebSocket = vi.fn(function () {
+      return wsMock;
+    });
 
     const sensor = { name: "Alerty", type: "alerts" };
     const card = createCard("alerts", sensor, 0);
@@ -777,15 +872,28 @@ describe("alert", () => {
   it("WS message with sun parameter updates sunState and re-renders condition icon", () => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () { return wsMock; });
+    globalThis.WebSocket = vi.fn(function () {
+      return wsMock;
+    });
 
-    sensorsConfig.condition = { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" };
+    sensorsConfig.condition = {
+      name: "Warunki",
+      type: "condition",
+      icon: "mdi:weather-sunny",
+      color: "#FDD835",
+    };
     const card = createCard("condition", sensorsConfig.condition, 0);
     document.getElementById("weather-grid").appendChild(card);
 
     connectWebSocket();
 
-    updateCard("condition", "partly cloudy", null, "2026-06-23T12:00:00Z", "mdi:weather-partly-cloudy");
+    updateCard(
+      "condition",
+      "partly cloudy",
+      null,
+      "2026-06-23T12:00:00Z",
+      "mdi:weather-partly-cloudy",
+    );
 
     expect(document.getElementById("condition-icon-img").src).toContain("partly-cloudy-day.svg");
 
@@ -849,10 +957,21 @@ describe("loadSunState", () => {
       json: () => Promise.resolve({ value: "below_horizon", timestamp: "2026-06-23T22:00:00Z" }),
     });
 
-    sensorsConfig.condition = { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" };
+    sensorsConfig.condition = {
+      name: "Warunki",
+      type: "condition",
+      icon: "mdi:weather-sunny",
+      color: "#FDD835",
+    };
     const card = createCard("condition", sensorsConfig.condition, 0);
     document.getElementById("weather-grid").appendChild(card);
-    updateCard("condition", "partly cloudy", null, "2026-06-23T12:00:00Z", "mdi:weather-partly-cloudy");
+    updateCard(
+      "condition",
+      "partly cloudy",
+      null,
+      "2026-06-23T12:00:00Z",
+      "mdi:weather-partly-cloudy",
+    );
 
     await loadSunState();
     expect(sunState.value).toBe("below_horizon");
@@ -897,8 +1016,20 @@ describe("init", () => {
 
   it("creates cards for all sensors", async () => {
     const sensors = {
-      temperature: { name: "Temp", type: "numeric", icon: "mdi:thermometer", color: "#E53935", round: 1, unit: "°C" },
-      condition: { name: "Warunki", type: "condition", icon: "mdi:weather-sunny", color: "#FDD835" },
+      temperature: {
+        name: "Temp",
+        type: "numeric",
+        icon: "mdi:thermometer",
+        color: "#E53935",
+        round: 1,
+        unit: "°C",
+      },
+      condition: {
+        name: "Warunki",
+        type: "condition",
+        icon: "mdi:weather-sunny",
+        color: "#FDD835",
+      },
     };
     globalThis.fetch = vi.fn((url) => {
       if (url.includes("/sensors")) {
@@ -918,7 +1049,14 @@ describe("init", () => {
 
   it("sets charts for numeric sensors", async () => {
     const sensors = {
-      temperature: { name: "Temp", type: "numeric", icon: "mdi:thermometer", color: "#E53935", round: 1, unit: "°C" },
+      temperature: {
+        name: "Temp",
+        type: "numeric",
+        icon: "mdi:thermometer",
+        color: "#E53935",
+        round: 1,
+        unit: "°C",
+      },
     };
     globalThis.fetch = vi.fn((url) => {
       if (url.includes("/sensors")) {
@@ -938,12 +1076,60 @@ describe("forecast", () => {
   };
 
   const FORECAST_DATA = [
-    { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: 23.1, precipitation: 0.0, cloud_coverage: 75, wind_speed: 15.0 },
-    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: false, condition: "rainy", temperature: 20.5, precipitation: 0.1, cloud_coverage: 90, wind_speed: 27.36 },
-    { datetime: "2026-07-23T00:00:00+00:00", is_daytime: true, condition: "partlycloudy", temperature: 20.2, precipitation: 1.6, cloud_coverage: 50, wind_speed: 17.28 },
-    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 17.9, precipitation: 0.6, cloud_coverage: 85, wind_speed: 24.84 },
-    { datetime: "2026-07-24T00:00:00+00:00", is_daytime: true, condition: "rainy", temperature: 21.7, precipitation: 2.0, cloud_coverage: 60, wind_speed: 18.5 },
-    { datetime: "2026-07-25T00:00:00+00:00", is_daytime: false, condition: "partlycloudy", temperature: 20.3, precipitation: 0.0, cloud_coverage: 30, wind_speed: 16.2 },
+    {
+      datetime: "2026-07-22T00:00:00+00:00",
+      is_daytime: true,
+      condition: "cloudy",
+      temperature: 23.1,
+      precipitation: 0.0,
+      cloud_coverage: 75,
+      wind_speed: 15.0,
+    },
+    {
+      datetime: "2026-07-23T00:00:00+00:00",
+      is_daytime: false,
+      condition: "rainy",
+      temperature: 20.5,
+      precipitation: 0.1,
+      cloud_coverage: 90,
+      wind_speed: 27.36,
+    },
+    {
+      datetime: "2026-07-23T00:00:00+00:00",
+      is_daytime: true,
+      condition: "partlycloudy",
+      temperature: 20.2,
+      precipitation: 1.6,
+      cloud_coverage: 50,
+      wind_speed: 17.28,
+    },
+    {
+      datetime: "2026-07-24T00:00:00+00:00",
+      is_daytime: false,
+      condition: "partlycloudy",
+      temperature: 17.9,
+      precipitation: 0.6,
+      cloud_coverage: 85,
+      wind_speed: 24.84,
+    },
+    {
+      datetime: "2026-07-24T00:00:00+00:00",
+      is_daytime: true,
+      condition: "rainy",
+      temperature: 21.7,
+      precipitation: 2.0,
+      cloud_coverage: 60,
+      wind_speed: 18.5,
+    },
+    {
+      datetime: "2026-07-25T00:00:00+00:00",
+      is_daytime: false,
+      condition: "partlycloudy",
+      temperature: 20.3,
+      precipitation: 0.0,
+      cloud_coverage: 30,
+      wind_speed: 16.2,
+    },
   ];
 
   it("getPolishDayAbbr returns correct Polish abbreviations", () => {
@@ -957,8 +1143,12 @@ describe("forecast", () => {
   });
 
   it("getConditionSvgPath uses isDaytime parameter for partlycloudy", () => {
-    expect(getConditionSvgPath("partlycloudy", null, true)).toBe("weather_icons/partly-cloudy-day.svg");
-    expect(getConditionSvgPath("partlycloudy", null, false)).toBe("weather_icons/partly-cloudy-night.svg");
+    expect(getConditionSvgPath("partlycloudy", null, true)).toBe(
+      "weather_icons/partly-cloudy-day.svg",
+    );
+    expect(getConditionSvgPath("partlycloudy", null, false)).toBe(
+      "weather_icons/partly-cloudy-night.svg",
+    );
   });
 
   it("getConditionSvgPath ignores isDaytime for non-partlycloudy", () => {
@@ -1141,7 +1331,15 @@ describe("forecast", () => {
     document.getElementById("weather-grid").appendChild(card);
 
     const dataWithNulls = [
-      { datetime: "2026-07-22T00:00:00+00:00", is_daytime: true, condition: "cloudy", temperature: null, precipitation: null, cloud_coverage: null, wind_speed: null },
+      {
+        datetime: "2026-07-22T00:00:00+00:00",
+        is_daytime: true,
+        condition: "cloudy",
+        temperature: null,
+        precipitation: null,
+        cloud_coverage: null,
+        wind_speed: null,
+      },
     ];
     updateCard("forecast", dataWithNulls, null, "2026-07-22T12:00:00Z");
 
@@ -1161,7 +1359,8 @@ describe("forecast", () => {
 
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ forecast: FORECAST_DATA.slice(0, 1), timestamp: "2026-07-22T14:00:00Z" }),
+      json: () =>
+        Promise.resolve({ forecast: FORECAST_DATA.slice(0, 1), timestamp: "2026-07-22T14:00:00Z" }),
     });
 
     await loadForecast();
@@ -1201,7 +1400,9 @@ describe("forecast", () => {
   it("WS forecast message updates the card", () => {
     globalThis.location = { host: "localhost:8332", protocol: "http:" };
     const wsMock = { onopen: null, onmessage: null, onclose: null, onerror: null, close: vi.fn() };
-    globalThis.WebSocket = vi.fn(function () { return wsMock; });
+    globalThis.WebSocket = vi.fn(function () {
+      return wsMock;
+    });
 
     sensorsConfig.forecast = SENSOR_FORECAST.forecast;
     const card = createCard("forecast", SENSOR_FORECAST.forecast, 0);

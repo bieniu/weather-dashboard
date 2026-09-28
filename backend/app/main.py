@@ -4,9 +4,9 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete
@@ -22,39 +22,86 @@ from .routers.weather import router as weather_router
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable
 
+    from sqlalchemy.engine import CursorResult
     from starlette.requests import Request
     from starlette.responses import Response
 
 logger = logging.getLogger(__name__)
 
+RETENTION_DAYS = 30
+CLEANUP_INTERVAL_SECONDS = 3600
+
+# Long-running tasks started by the lifespan; /health reports 503 if any has died.
+background_tasks: dict[str, asyncio.Task[None]] = {}
+
+
+def _configure_logging() -> None:
+    """Attach a root handler so `app.*` INFO logs are visible next to uvicorn's."""
+    logging.basicConfig(
+        level=settings.log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
 
 async def cleanup_old_readings() -> None:
-    """Delete readings older than 30 days — runs every hour."""
+    """Delete readings older than RETENTION_DAYS — immediately, then hourly.
+
+    One failed cycle is logged and retried on the next one instead of killing
+    the task for the lifetime of the process.
+    """
     while True:
-        await asyncio.sleep(3600)
-        async with SessionLocal() as db:
-            cutoff = datetime.now(UTC) - timedelta(days=30)
-            await db.execute(
-                delete(WeatherReading).where(WeatherReading.timestamp < cutoff),
-            )
-            await db.commit()
-            logger.info("Old records removed")
+        try:
+            async with SessionLocal() as db:
+                cutoff = datetime.now(UTC) - timedelta(days=RETENTION_DAYS)
+                result = cast(
+                    "CursorResult[Any]",
+                    await db.execute(
+                        delete(WeatherReading).where(WeatherReading.timestamp < cutoff),
+                    ),
+                )
+                await db.commit()
+                logger.info(
+                    "Removed %d reading(s) older than %d days",
+                    result.rowcount,
+                    RETENTION_DAYS,
+                )
+        except Exception:
+            logger.exception("Cleanup of old readings failed; retrying next cycle")
+        await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
+
+
+def _log_task_exit(task: asyncio.Task[None]) -> None:
+    """Report a background task that ended for any reason other than cancellation."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is None:
+        logger.error("Background task %s exited unexpectedly", task.get_name())
+    else:
+        logger.error("Background task %s died", task.get_name(), exc_info=exc)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     """Startup/shutdown lifecycle — initialize DB, MQTT and cleanup tasks."""
+    _configure_logging()
     await init_db()
     await _load_sun_state()
-    mqtt_task = asyncio.create_task(mqtt_listener())
-    cleanup_task = asyncio.create_task(cleanup_old_readings())
+    background_tasks["mqtt_listener"] = asyncio.create_task(
+        mqtt_listener(), name="mqtt_listener"
+    )
+    background_tasks["cleanup_old_readings"] = asyncio.create_task(
+        cleanup_old_readings(), name="cleanup_old_readings"
+    )
+    for task in background_tasks.values():
+        task.add_done_callback(_log_task_exit)
     yield
-    cleanup_task.cancel()
-    mqtt_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await mqtt_task
-    with suppress(asyncio.CancelledError):
-        await cleanup_task
+    for task in background_tasks.values():
+        task.cancel()
+    for task in background_tasks.values():
+        with suppress(asyncio.CancelledError):
+            await task
+    background_tasks.clear()
 
 
 def _build_csp() -> str:
@@ -111,7 +158,12 @@ app = FastAPI(title="Weather Dashboard", lifespan=lifespan)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Health check endpoint for Docker."""
+    """Health check for Docker — 503 when a background task has stopped."""
+    dead = sorted(name for name, task in background_tasks.items() if task.done())
+    if dead:
+        raise HTTPException(
+            status_code=503, detail=f"background tasks stopped: {', '.join(dead)}"
+        )
     return {"status": "ok"}
 
 
