@@ -230,3 +230,71 @@ async def test_log_task_exit_reports_crash_and_ignores_cancel(caplog) -> None:
     assert "Background task crasher died" in caplog.text
     assert "RuntimeError: boom" in caplog.text
     assert "sleeper" not in caplog.text
+
+
+async def test_log_task_exit_reports_clean_exit(caplog) -> None:
+    """A background task that returns (instead of running forever) is reported."""
+    import asyncio
+
+    from app.main import _log_task_exit  # ty: ignore[unresolved-import]
+
+    async def finish() -> None:
+        return
+
+    task = asyncio.create_task(finish(), name="quitter")
+    await asyncio.sleep(0)
+
+    with caplog.at_level("ERROR"):
+        _log_task_exit(task)
+
+    assert "Background task quitter exited unexpectedly" in caplog.text
+
+
+async def test_lifespan_starts_and_stops_background_tasks(monkeypatch) -> None:
+    """Startup wires DB init, sun state and both tasks; shutdown cancels them."""
+    import asyncio
+    import logging
+    from unittest.mock import AsyncMock
+
+    from app import main  # ty: ignore[unresolved-import]
+
+    init_db = AsyncMock()
+    load_sun_state = AsyncMock()
+    basic_config_calls: list[dict] = []
+    monkeypatch.setattr(main, "init_db", init_db)
+    monkeypatch.setattr(main, "_load_sun_state", load_sun_state)
+    # Record instead of touching the root logger pytest is capturing from.
+    monkeypatch.setattr(
+        logging, "basicConfig", lambda **kw: basic_config_calls.append(kw)
+    )
+
+    async def run_forever() -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(main, "mqtt_listener", run_forever)
+    monkeypatch.setattr(main, "cleanup_old_readings", run_forever)
+
+    async with main.lifespan(main.app):
+        assert [c["level"] for c in basic_config_calls] == [main.settings.log_level]
+        init_db.assert_awaited_once()
+        load_sun_state.assert_awaited_once()
+        assert set(main.background_tasks) == {"mqtt_listener", "cleanup_old_readings"}
+        started = dict(main.background_tasks)
+        for name, task in started.items():
+            assert task.get_name() == name
+            assert not task.done()
+
+    assert main.background_tasks == {}
+    assert all(task.cancelled() for task in started.values())
+
+
+def test_build_csp_includes_umami_host(monkeypatch) -> None:
+    """When analytics is configured, the Umami host is allowed in script-src."""
+    from app import main  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(main.settings, "umami_host", "https://umami.example.com")
+    csp = main._build_csp()
+
+    assert (
+        "script-src 'self' https://cdn.jsdelivr.net https://umami.example.com;" in csp
+    )
