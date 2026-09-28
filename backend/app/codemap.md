@@ -12,7 +12,7 @@ Application Core — asynchronous FastAPI server acting as the ingestion, persis
 - **Schema-driven serialization** — `WeatherReadingOut` Pydantic model with `from_attributes` and custom `field_serializer` for UTC-aware ISO 8601 output.
 - **MQTT ingestion via aiomqtt** — persistent `async for` message loop; any failure (not only `MqttError`) is logged and the client reconnects with capped exponential backoff (5 s doubling to 60 s, ±20 % jitter, reset after a successful connect); message dispatch dispatched to handler functions keyed by sensor type (`numeric`, `condition`, `text`, `alerts`, `forecast`).
 - **Middleware stack** (Starlette `BaseHTTPMiddleware`, listed outer to inner; `main.py` adds them in reverse because the last `add_middleware` call becomes the outermost layer):
-  1. `CSPMiddleware` — applies Content-Security-Policy header to all responses.
+  1. `SecurityHeadersMiddleware` — Content-Security-Policy, `X-Content-Type-Options`, `Referrer-Policy` and the `Cache-Control` policy (`no-cache` HTML/worker, `no-store` API, `immutable` cache-busted assets) on all responses.
   2. `CloudflareIPMiddleware` — reads `Cf-Connecting-IP` header to set `request.state.real_ip`.
   3. `RateLimitMiddleware` — sliding-window rate limiter at 100 requests/60s per IP, applied to `/api/*` paths only; per-IP windows live in an `OrderedDict` capped at `MAX_TRACKED_IPS` (least recently seen key evicted); WebSocket scopes never reach `BaseHTTPMiddleware.dispatch`.
   4. `CORSMiddleware` — CORS for `settings.allowed_origins` (public origin without port + loopback dev origins).

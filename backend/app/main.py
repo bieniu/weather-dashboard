@@ -105,22 +105,49 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
 
 def _build_csp() -> str:
+    # Umami loads its script from its host and posts beacons back to it.
     script_src = "'self'"
+    connect_src = "'self'"  # 'self' also covers the same-origin WebSocket (CSP3)
     if settings.umami_host:
         script_src += f" {settings.umami_host}"
+        connect_src += f" {settings.umami_host}"
     return (
         "default-src 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none'; "
         f"script-src {script_src}; "
         "style-src 'self' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
-        "connect-src 'self' ws: wss:; "
+        f"connect-src {connect_src}; "
         "worker-src 'self'; "
         "frame-ancestors 'none';"
     )
 
 
 CSP_HEADER = _build_csp()
+
+# Always revalidated: the HTML references the current ?v= assets and the
+# service worker must reach clients on the very next navigation (Cloudflare
+# honours this at the edge too). Cache-busted assets are immutable per version.
+NO_CACHE_PATHS = frozenset({"/", "/index.html", "/service-worker.js"})
+CACHE_CONTROL_NO_CACHE = "no-cache"
+CACHE_CONTROL_NO_STORE = "no-store"
+CACHE_CONTROL_IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+def _cache_control(request: Request, response: Response) -> str | None:
+    path = request.url.path
+    if path in NO_CACHE_PATHS:
+        return CACHE_CONTROL_NO_CACHE
+    if path.startswith("/api/"):
+        return CACHE_CONTROL_NO_STORE
+    # Never let a 404 for a versioned URL (typo, mid-deploy) become immutable
+    # at the edge for a year.
+    if "v" in request.query_params and response.status_code in {200, 304}:
+        return CACHE_CONTROL_IMMUTABLE
+    return None
 
 
 class CloudflareIPMiddleware(BaseHTTPMiddleware):
@@ -139,17 +166,22 @@ class CloudflareIPMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-class CSPMiddleware(BaseHTTPMiddleware):
-    """Middleware that adds Content-Security-Policy header to all responses."""
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add CSP, MIME-sniffing and referrer protection, and cache policy headers."""
 
     async def dispatch(
         self,
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        """Add CSP header to every response."""
+        """Set the security and caching headers on every response."""
         response: Response = await call_next(request)
         response.headers["Content-Security-Policy"] = CSP_HEADER
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        cache_control = _cache_control(request, response)
+        if cache_control and "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = cache_control
         return response
 
 
@@ -174,11 +206,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # Starlette runs the middleware added LAST as the outermost layer, so the order
-# below yields: CSP -> CloudflareIP -> RateLimit -> CORS -> app. CloudflareIP must
-# wrap RateLimit so that `request.state.real_ip` is set before the limiter reads it.
+# below yields: SecurityHeaders -> CloudflareIP -> RateLimit -> CORS -> app.
+# CloudflareIP must wrap RateLimit so that `request.state.real_ip` is set before
+# the limiter reads it.
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(CloudflareIPMiddleware)
-app.add_middleware(CSPMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(weather_router)
 

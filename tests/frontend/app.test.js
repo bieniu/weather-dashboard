@@ -2,7 +2,6 @@ process.env.TZ = "UTC";
 
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  updateForecastLayout,
   getConditionSvgPath,
   getPolishDayAbbr,
   formatTimestamp,
@@ -17,6 +16,7 @@ import {
   loadForecast,
   connectWebSocket,
   initThemeToggle,
+  THEME_STORAGE_KEY,
   loadSensors,
   initAnalytics,
   init,
@@ -678,6 +678,40 @@ describe("connectWebSocket", () => {
 });
 
 describe("initThemeToggle", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("uses the stored preference over the OS preference", () => {
+    localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    initThemeToggle();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
+
+  it("persists an explicit choice", () => {
+    initThemeToggle();
+    document.getElementById("theme-toggle").click();
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+  });
+
+  it("follows OS theme changes only while there is no stored choice", () => {
+    const listeners = {};
+    window.matchMedia = vi.fn(() => ({
+      matches: false,
+      addEventListener: (type, fn) => {
+        listeners[type] = fn;
+      },
+    }));
+    initThemeToggle();
+
+    listeners.change({ matches: true });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+
+    localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    listeners.change({ matches: false });
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+  });
+
   it("sets data-theme attribute on html", () => {
     document.documentElement.removeAttribute("data-theme");
     initThemeToggle();
@@ -1782,54 +1816,5 @@ describe("forecast", () => {
     expect(cols[0].querySelector(".forecast-col__wind-value").textContent).toBe("15 km/h");
 
     delete sensorsConfig.forecast;
-  });
-
-  it("updateForecastLayout adds compact class when grid has 1 column", () => {
-    const grid = document.getElementById("weather-grid");
-    const forecastGrid = document.createElement("div");
-    forecastGrid.className = "forecast-grid";
-    grid.appendChild(forecastGrid);
-
-    vi.spyOn(window, "getComputedStyle").mockReturnValue({
-      gridTemplateColumns: "1fr",
-    });
-
-    updateForecastLayout();
-
-    expect(forecastGrid.classList.contains("forecast-grid--compact")).toBe(true);
-    vi.restoreAllMocks();
-  });
-
-  it("updateForecastLayout removes compact class when grid has multiple columns", () => {
-    const grid = document.getElementById("weather-grid");
-    const forecastGrid = document.createElement("div");
-    forecastGrid.className = "forecast-grid";
-    forecastGrid.classList.add("forecast-grid--compact");
-    grid.appendChild(forecastGrid);
-
-    vi.spyOn(window, "getComputedStyle").mockReturnValue({
-      gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr",
-    });
-
-    updateForecastLayout();
-
-    expect(forecastGrid.classList.contains("forecast-grid--compact")).toBe(false);
-    vi.restoreAllMocks();
-  });
-
-  it("updateForecastLayout does nothing when forecast grid is missing", () => {
-    // No forecast-grid in the DOM — should not throw
-    expect(() => updateForecastLayout()).not.toThrow();
-  });
-
-  it("updateForecastLayout does nothing when weather grid is missing", () => {
-    const grid = document.getElementById("weather-grid");
-    grid.remove();
-
-    const forecastGrid = document.createElement("div");
-    forecastGrid.className = "forecast-grid";
-    document.body.appendChild(forecastGrid);
-
-    expect(() => updateForecastLayout()).not.toThrow();
   });
 });
