@@ -41,8 +41,8 @@ Specific endpoint data flows:
 | Endpoint | Source | Query pattern |
 |---|---|---|
 | `GET /sensors` | `settings.sensors` (config.yaml) | None — pure config dump |
-| `GET /current` | `WeatherReading` table | One `LIMIT 1` query per sensor key, ordered by `timestamp DESC` |
-| `GET /history/{param}` | `WeatherReading` table | Time-range filter (`>= now - N hours`, `1 <= hours <= 720`), ordered by `timestamp ASC` |
+| `GET /current` | `WeatherReading` table | One query: `UNION ALL` of per-sensor `ORDER BY timestamp DESC, id DESC LIMIT 1` branches, each an index seek (ties resolved by highest `id`) |
+| `GET /history/{param}` | `WeatherReading` table | Time-range filter (`>= now - N hours`, `1 <= hours <= 720`, default `DEFAULT_HISTORY_HOURS` = 24), ordered by `timestamp ASC` |
 | `GET /alerts` | `WeatherReading` table | Filtered by `alerts_key` parameter + `valid_to > now`, ordered by `timestamp DESC` |
 | `GET /sun` | `WeatherReading` table | Single `LIMIT 1` where `parameter == "sun"` |
 | `GET /forecast` | `WeatherReading` table | Single `LIMIT 1` where sensor `type == "forecast"`, returns `{forecast: json.loads(value_str), timestamp: iso_string}` |

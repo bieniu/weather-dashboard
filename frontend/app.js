@@ -1,8 +1,13 @@
 const API_BASE = "/api/weather";
 const WS_PROTOCOL = location.protocol === "https:" ? "wss:" : "ws:";
 const WS_URL = `${WS_PROTOCOL}//${location.host}/api/weather/ws`;
-const HISTORY_HOURS = 12;
-const MAX_CHART_POINTS = 144;
+const HISTORY_HOURS = 24; // mirrors DEFAULT_HISTORY_HOURS in backend/app/config.py
+const CHART_DECIMATION_SAMPLES = 200;
+const WS_RECONNECT_BASE_MS = 5000;
+const WS_RECONNECT_MAX_MS = 60000;
+const WS_RECONNECT_JITTER = 0.2;
+const WS_STATE_CONNECTING = 0;
+const WS_STATE_OPEN = 1;
 
 const MDI_TO_KEY = {
   "weather-sunny": "sunny",
@@ -80,12 +85,25 @@ const ALERT_ICONS = {
 const ALERT_GREEN_ICON = "weather_icons/alert-green.svg";
 
 const charts = {};
+// Source arrays of chart points, keyed by parameter. Once the decimation
+// plugin kicks in, Chart.js replaces `dataset.data` with an accessor to the
+// decimated copy, so the real array must be owned here and re-assigned.
+const chartPoints = {};
 let sensorsConfig = {};
 const sunState = { value: null };
 const conditionIconMap = {};
 
 const alerts = [];
 let alertTimerId = null;
+
+// WebSocket connection state (exported so tests can reset it).
+const wsState = { socket: null, reconnectTimer: null, reconnectAttempt: 0, attempted: false };
+
+async function getJson(path) {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
 function showAlertCard(alert) {
   const card = document.getElementById("card-alerts");
@@ -230,8 +248,8 @@ async function loadAlerts() {
   }
 }
 
-function formatTimestamp(isoString) {
-  const d = new Date(isoString);
+function formatTimestamp(value) {
+  const d = new Date(value); // ISO string or epoch milliseconds (chart points)
   return d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -387,9 +405,19 @@ function createChart(canvasId, parameter, color, decimals, unit) {
       responsive: true,
       maintainAspectRatio: false,
       animation: { duration: 400 },
+      // Points are stored as { x: epoch ms, y } already sorted by time, so
+      // Chart.js can skip parsing and decimate long histories before drawing.
+      parsing: false,
+      normalized: true,
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: { display: false },
+        decimation: {
+          enabled: true,
+          algorithm: "lttb",
+          samples: CHART_DECIMATION_SAMPLES,
+          threshold: 2 * CHART_DECIMATION_SAMPLES, // default would be 4x canvas width
+        },
         tooltip: {
           callbacks: {
             label: (ctx) => ` ${ctx.parsed.y.toFixed(decimals)} ${unit}`,
@@ -434,7 +462,7 @@ function updateChartTheme() {
     c.options.scales.y.grid.color = border;
     c.options.scales.x.ticks.color = tick;
     c.options.scales.y.ticks.color = tick;
-    c.update();
+    c.update("none"); // colours only: no need to animate every chart
   });
 }
 
@@ -508,60 +536,142 @@ function updateCard(parameter, value, unit, timestamp, icon) {
   }
 }
 
+function historyWindowMs(parameter) {
+  return (sensorsConfig[parameter]?.history_hours ?? HISTORY_HOURS) * 60 * 60 * 1000;
+}
+
+// Keeps the last `history_hours` of data, measured from the newest point so
+// the window is exactly what the backend would return for the same sensor.
+function trimChartData(parameter, data) {
+  if (data.length === 0) return;
+  const cutoff = data[data.length - 1].x - historyWindowMs(parameter);
+  while (data.length && data[0].x < cutoff) data.shift();
+}
+
+function sourcePoints(parameter) {
+  chartPoints[parameter] ??= charts[parameter].data.datasets[0].data;
+  return chartPoints[parameter];
+}
+
+function setChartData(parameter, data, mode) {
+  chartPoints[parameter] = data;
+  charts[parameter].data.datasets[0].data = data; // through the accessor if decimated
+  charts[parameter].update(mode);
+}
+
 function appendChartPoint(parameter, value, timestamp) {
-  const chart = charts[parameter];
-  if (!chart) return;
-  chart.data.datasets[0].data.push({ x: new Date(timestamp), y: value });
-  if (chart.data.datasets[0].data.length > MAX_CHART_POINTS) {
-    chart.data.datasets[0].data.shift();
+  if (!charts[parameter]) return;
+  const data = sourcePoints(parameter);
+  data.push({ x: Date.parse(timestamp), y: value });
+  trimChartData(parameter, data);
+  setChartData(parameter, data, "none");
+}
+
+// Card values for every sensor in one request; histories are only for charts.
+async function loadCurrent() {
+  try {
+    const current = await getJson("/current");
+    for (const [parameter, reading] of Object.entries(current)) {
+      const sensor = sensorsConfig[parameter];
+      if (!reading || !sensor) continue;
+      if (sensor.type === "condition" || sensor.type === "text") {
+        updateCard(parameter, reading.value_str, null, reading.timestamp, reading.icon);
+      } else if (charts[parameter]) {
+        updateCard(parameter, reading.value, reading.unit, reading.timestamp);
+      }
+    }
+  } catch (err) {
+    console.error("[Current] Error fetching current readings:", err);
   }
-  chart.update("none");
 }
 
 async function loadHistory(parameter) {
+  const chart = charts[parameter];
+  if (!chart) return;
   try {
-    const sensor = sensorsConfig[parameter];
-    if (sensor?.type === "alerts" || sensor?.type === "forecast") return;
-
-    const hours = sensor?.history_hours ?? HISTORY_HOURS;
-    const res = await fetch(`${API_BASE}/history/${parameter}?hours=${hours}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const history = await res.json();
-
-    if (sensor?.type === "condition" || sensor?.type === "text") {
-      if (history.length > 0) {
-        const last = history[history.length - 1];
-        updateCard(parameter, last.value_str, null, last.timestamp, last.icon);
-      }
-      return;
-    }
-
-    const chart = charts[parameter];
-    if (!chart) return;
-    chart.data.datasets[0].data = history.map((r) => ({
-      x: new Date(r.timestamp),
-      y: r.value,
-    }));
-    chart.update();
-    if (history.length > 0) {
-      const last = history[history.length - 1];
-      updateCard(parameter, last.value, last.unit, last.timestamp);
-    }
+    const hours = sensorsConfig[parameter]?.history_hours ?? HISTORY_HOURS;
+    const history = await getJson(`/history/${parameter}?hours=${hours}`);
+    const points = history.map((r) => ({ x: Date.parse(r.timestamp), y: r.value }));
+    const newest = points.length > 0 ? points[points.length - 1].x : -Infinity;
+    // The WebSocket is open while this request is in flight: keep the live
+    // points that are newer than the history instead of overwriting them.
+    const live = sourcePoints(parameter).filter((p) => p.x > newest);
+    const data = points.concat(live);
+    trimChartData(parameter, data);
+    setChartData(parameter, data, undefined);
   } catch (err) {
     console.error(`[History] Error fetching ${parameter}:`, err);
   }
 }
 
-function connectWebSocket() {
-  const statusEl = document.getElementById("connection-status");
-  const ws = new WebSocket(WS_URL);
+function chartSensorKeys() {
+  return Object.keys(charts);
+}
 
-  ws.onopen = () => {
-    statusEl.className = "status status--connected";
-    statusEl.innerHTML = `<span class="status__dot"></span><span class="status__label">Połączono</span>`;
+function setConnectionStatus(connected) {
+  const statusEl = document.getElementById("connection-status");
+  if (!statusEl) return;
+  statusEl.className = `status ${connected ? "status--connected" : "status--disconnected"}`;
+  const label = statusEl.querySelector(".status__label");
+  if (label) label.textContent = connected ? "Połączono" : "Rozłączono";
+}
+
+// 5 s, 10 s, 20 s, 40 s, 60 s, 60 s ... with ±20 % jitter so clients do not
+// reconnect in lockstep after an outage.
+function reconnectDelay(attempt) {
+  const base = Math.min(WS_RECONNECT_BASE_MS * 2 ** attempt, WS_RECONNECT_MAX_MS);
+  return base * (1 + (Math.random() * 2 - 1) * WS_RECONNECT_JITTER);
+}
+
+function scheduleReconnect() {
+  if (wsState.reconnectTimer) return;
+  const delay = reconnectDelay(wsState.reconnectAttempt);
+  wsState.reconnectAttempt += 1;
+  wsState.reconnectTimer = setTimeout(() => {
+    wsState.reconnectTimer = null;
+    connectWebSocket();
+  }, delay);
+}
+
+// Tab became visible / browser back online: do not wait out the backoff.
+function reconnectNow() {
+  const state = wsState.socket?.readyState;
+  if (state === WS_STATE_OPEN || state === WS_STATE_CONNECTING) return;
+  if (wsState.reconnectTimer) {
+    clearTimeout(wsState.reconnectTimer);
+    wsState.reconnectTimer = null;
+  }
+  wsState.reconnectAttempt = 0;
+  connectWebSocket();
+}
+
+// Whatever was pushed while disconnected is gone: reload cards, charts,
+// alerts and the forecast so the dashboard shows no silent gap.
+async function backfillAfterReconnect() {
+  await Promise.all([
+    loadCurrent(),
+    ...chartSensorKeys().map(loadHistory),
+    loadAlerts(),
+    loadForecast(),
+  ]);
+}
+
+function connectWebSocket() {
+  // Only the very first attempt (page load, initial requests in flight) skips
+  // the backfill; if that attempt fails, the first successful open reloads
+  // everything the failed initial requests could not.
+  const isFirstAttempt = !wsState.attempted;
+  wsState.attempted = true;
+  const socket = new WebSocket(WS_URL);
+  wsState.socket = socket;
+
+  socket.onopen = () => {
+    setConnectionStatus(true);
+    wsState.reconnectAttempt = 0;
+    if (!isFirstAttempt) backfillAfterReconnect();
   };
 
-  ws.onmessage = (event) => {
+  socket.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.parameter === "alerts") {
@@ -586,15 +696,15 @@ function connectWebSocket() {
     }
   };
 
-  ws.onclose = () => {
-    statusEl.className = "status status--disconnected";
-    statusEl.innerHTML = `<span class="status__dot"></span><span class="status__label">Rozłączono</span>`;
-    setTimeout(connectWebSocket, 5000);
+  socket.onclose = () => {
+    if (socket !== wsState.socket) return; // superseded by reconnectNow(); ignore
+    setConnectionStatus(false);
+    scheduleReconnect();
   };
 
-  ws.onerror = (err) => {
+  socket.onerror = (err) => {
     console.error("[WS] Error:", err);
-    ws.close();
+    socket.close();
   };
 }
 
@@ -676,6 +786,7 @@ async function init() {
       sensor.type !== "forecast"
     ) {
       charts[key] = createChart(`chart-${key}`, key, sensor.color, sensor.round ?? 1, sensor.unit);
+      chartPoints[key] = [];
     }
     idx++;
   }
@@ -683,13 +794,22 @@ async function init() {
   updateForecastLayout();
   window.addEventListener("resize", updateForecastLayout);
 
-  await Promise.all(Object.keys(sensorsConfig).map((key) => loadHistory(key)));
-
-  loadForecast();
-  loadAlerts();
-  loadSunState();
-  scheduleAlertCheck();
+  // Live updates first, so nothing pushed while the initial requests are in
+  // flight is lost (loadHistory merges points that arrived in the meantime).
   connectWebSocket();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") reconnectNow();
+  });
+  window.addEventListener("online", reconnectNow);
+
+  await Promise.all([
+    loadCurrent(),
+    ...chartSensorKeys().map(loadHistory),
+    loadForecast(),
+    loadAlerts(),
+    loadSunState(),
+  ]);
+  scheduleAlertCheck();
   initAnalytics();
 
   document.addEventListener("click", requestNotificationPermission, { once: true });
@@ -711,15 +831,22 @@ export {
   updateChartTheme,
   updateCard,
   appendChartPoint,
+  trimChartData,
+  loadCurrent,
   loadHistory,
   loadForecast,
   connectWebSocket,
+  reconnectNow,
+  backfillAfterReconnect,
+  setConnectionStatus,
+  wsState,
   initThemeToggle,
   loadSensors,
   initAnalytics,
   registerServiceWorker,
   init,
   charts,
+  chartPoints,
   sensorsConfig,
   alerts,
   sunState,
@@ -737,5 +864,5 @@ export {
   loadSunState,
   API_BASE,
   HISTORY_HOURS,
-  MAX_CHART_POINTS,
+  getJson,
 };

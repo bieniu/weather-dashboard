@@ -13,7 +13,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, union_all
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import (
     AsyncSession,  # noqa: TC002  # needed at runtime for get_type_hints
 )
 
-from app.config import MAX_HISTORY_HOURS, settings
+from app.config import DEFAULT_HISTORY_HOURS, MAX_HISTORY_HOURS, settings
 from app.database import get_db
 from app.models import WeatherReading
 from app.mqtt_client import manager
@@ -58,17 +58,30 @@ async def get_sensors() -> dict:
 async def get_current(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Return the latest reading for each configured sensor."""
-    result: dict = {}
-    for param in settings.sensors:
-        stmt = (
-            select(WeatherReading)
-            .where(WeatherReading.parameter == param)
-            .order_by(desc(WeatherReading.timestamp))
-            .limit(1)
-        )
-        row = (await db.execute(stmt)).scalar_one_or_none()
-        result[param] = row
+    """Return the latest reading for each configured sensor in a single query.
+
+    The frontend calls this once at startup (and after a WebSocket reconnect)
+    for the card values, instead of downloading full histories.
+    """
+    # One `... WHERE parameter = ? ORDER BY timestamp DESC LIMIT 1` per sensor,
+    # glued with UNION ALL: each branch is an index seek on
+    # ix_weather_parameter_timestamp. (A `max(timestamp) GROUP BY parameter`
+    # join reads every index entry instead: ~60x slower on a 30-day database.)
+    if not settings.sensors:
+        return {}
+    per_sensor = [
+        select(WeatherReading)
+        .where(WeatherReading.parameter == parameter)
+        .order_by(desc(WeatherReading.timestamp), desc(WeatherReading.id))
+        .limit(1)
+        .subquery()
+        .select()
+        for parameter in settings.sensors
+    ]
+    stmt = select(WeatherReading).from_statement(union_all(*per_sensor))
+    result: dict[str, WeatherReading | None] = dict.fromkeys(settings.sensors)
+    for row in (await db.execute(stmt)).scalars():
+        result[str(row.parameter)] = row
     return result
 
 
@@ -76,9 +89,9 @@ async def get_current(
 async def get_history(
     parameter: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    hours: Annotated[int, Query(ge=1, le=MAX_HISTORY_HOURS)] = 12,
+    hours: Annotated[int, Query(ge=1, le=MAX_HISTORY_HOURS)] = DEFAULT_HISTORY_HOURS,
 ) -> Sequence[WeatherReading]:
-    """Return reading history for the last `hours` hours (default 12, max 720)."""
+    """Return reading history for the last `hours` hours (default 24, max 720)."""
     if parameter not in settings.sensors:
         raise HTTPException(status_code=400, detail="Invalid parameter")
 
