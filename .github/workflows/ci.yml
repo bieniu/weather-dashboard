@@ -139,3 +139,59 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/lcov.info
           flags: frontend
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: weather-dashboard:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image
+        # Starts the container without a reachable MQTT broker (the listener keeps
+        # retrying, so the app stays up) and waits for the Dockerfile HEALTHCHECK
+        # to report healthy. This exercises the non-root user, the /data volume,
+        # the venv PATH and the healthcheck command itself. Only the probe timing
+        # is overridden here so CI does not wait for the production 30 s interval.
+        run: |
+          docker run --detach --name weather-dashboard \
+            --health-interval=5s --health-start-period=5s \
+            --env MQTT_BROKER=127.0.0.1 --env MQTT_USER=ci --env MQTT_PASSWORD=ci \
+            weather-dashboard:ci
+          status=starting
+          for _ in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Running}}' weather-dashboard)" != "true" ]; then
+              status=exited
+              break
+            fi
+            status=$(docker inspect \
+              --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' \
+              weather-dashboard)
+            case "$status" in healthy|unhealthy|no-healthcheck) break ;; esac
+            sleep 3
+          done
+          if [ "$status" != "healthy" ]; then
+            echo "::error::container did not become healthy (status: $status)"
+            exit 1
+          fi
+
+      - name: Show container logs
+        if: always()
+        run: docker logs weather-dashboard 2>&1 || true
