@@ -4,8 +4,14 @@ services:
     image: weather-dashboard:1.6.3
     container_name: weather-dashboard
     restart: unless-stopped
+    # The only public entry point is the Cloudflare tunnel, and the app trusts
+    # the Cf-Connecting-IP header it sets (per-IP rate limit, WebSocket caps).
+    # Binding to loopback keeps LAN clients from reaching the port directly and
+    # forging that header. cloudflared on the host connects to 127.0.0.1:8332;
+    # a cloudflared *container* on this compose network reaches the service as
+    # weather-dashboard:8332 regardless of this mapping (it could even be removed).
     ports:
-      - "8332:8332"
+      - "127.0.0.1:8332:8332"
     volumes:
       - weather-db:/data
     environment:

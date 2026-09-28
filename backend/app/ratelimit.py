@@ -1,7 +1,7 @@
 """Rate limiting middleware — sliding window per IP."""
 
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from typing import TYPE_CHECKING
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,6 +18,10 @@ RATE_LIMIT = 100
 WINDOW_SECONDS = 60
 CLEANUP_EVERY = 100
 LIMITED_PATH_PREFIX = "/api/"
+# Upper bound on distinct client keys kept in memory. Only reachable if
+# Cf-Connecting-IP can be forged (i.e. the port is exposed past the tunnel);
+# then the least recently seen key is evicted instead of growing without limit.
+MAX_TRACKED_IPS = 10_000
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -32,7 +36,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         """Initialise rate limiter with empty windows."""
         super().__init__(app)
-        self._windows: dict[str, deque[float]] = defaultdict(deque)
+        # Ordered by last access so eviction drops the least recently seen key.
+        self._windows: OrderedDict[str, deque[float]] = OrderedDict()
         self._request_count = 0
 
     async def dispatch(
@@ -46,7 +51,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         ip = getattr(request.state, "real_ip", "unknown")
         now = time.monotonic()
-        window = self._windows[ip]
+        window = self._windows.get(ip)
+        if window is None:
+            if len(self._windows) >= MAX_TRACKED_IPS:
+                self._windows.popitem(last=False)
+            window = self._windows[ip] = deque()
+        else:
+            # Also on the 429 path: a throttled client is still "recently seen"
+            # and must not be the eviction victim; only idle keys should age out.
+            self._windows.move_to_end(ip)
 
         while window and window[0] <= now - WINDOW_SECONDS:
             window.popleft()

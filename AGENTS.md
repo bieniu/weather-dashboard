@@ -46,6 +46,7 @@ docker compose up
 - Both ruff and ty are dev dependencies — install via `uv sync --frozen` from root.
 - Pre-commit wrapper: `prek` (reads `.pre-commit-config.yaml`). Run `prek run --all-files` to run all hooks.
 - `.env` is gitignored; example vars in docker-compose.yml: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`
+- Deployment: the Cloudflare tunnel is the only public entry point. docker-compose binds 8332 to `127.0.0.1` only, uvicorn runs without `--proxy-headers`, and the client IP for rate limiting / WebSocket caps comes solely from `Cf-Connecting-IP` (falling back to the socket peer). HSTS and HTTPS redirects are configured in Cloudflare, not in the app.
 
 ## Testing
 
