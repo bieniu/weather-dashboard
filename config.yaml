@@ -12,7 +12,7 @@ sensors:
     name: Jakość powietrza
   alerts:
     type: alerts
-    name: Alerty meteorologiczne
+    name: Alerty
   forecast:
     type: forecast
     name: Prognoza

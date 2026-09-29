@@ -17,6 +17,7 @@ import {
   scheduleAlertCheck,
   sendAlertNotification,
   showAlertCard,
+  toAlert,
   updateAlertVisibility,
 } from "../../frontend/alerts.js";
 import { init, initAnalytics, registerServiceWorker, resetState } from "../../frontend/app.js";
@@ -987,6 +988,62 @@ describe("alert", () => {
     vi.useRealTimers();
   });
 
+  it("shows the newest valid alert, falling back to older ones as newer ones expire", () => {
+    const t0 = new Date("2026-06-23T12:00:00Z").getTime();
+    const hour = 3600000;
+    const at = (h) => new Date(t0 + h * hour);
+    const iso = (h) => at(h).toISOString();
+    vi.useFakeTimers();
+    vi.setSystemTime(at(0));
+    const card = createCard("alerts", { name: "Alerty", type: "alerts" }, 0);
+    document.getElementById("weather-grid").appendChild(card);
+    const value = () => document.getElementById("alerts-value").textContent;
+
+    handleAlertUpdate(
+      toAlert({
+        value: "susza hydrologiczna",
+        level: null,
+        valid_to: iso(48 - 1 / 60),
+        timestamp: "a",
+      }),
+    );
+    expect(value()).toBe("susza hydrologiczna");
+    vi.setSystemTime(at(1));
+    handleAlertUpdate(
+      toAlert({ value: "upały", level: "orange", valid_to: iso(5), timestamp: "b" }),
+    );
+    expect(value()).toBe("upały");
+    vi.setSystemTime(at(2));
+    handleAlertUpdate(toAlert({ value: "burza", level: "red", valid_to: iso(3), timestamp: "c" }));
+    expect(value()).toBe("burza");
+
+    vi.setSystemTime(at(3.01));
+    updateAlertVisibility();
+    expect(value()).toBe("upały");
+    vi.setSystemTime(at(5.01));
+    updateAlertVisibility();
+    expect(value()).toBe("susza hydrologiczna");
+    expect(document.getElementById("alerts-icon-img").alt).toBe("green");
+    vi.setSystemTime(at(48));
+    updateAlertVisibility();
+    expect(card.style.display).toBe("none");
+    expect(alerts).toHaveLength(0);
+    resetState();
+    vi.useRealTimers();
+  });
+
+  it("updateAlertVisibility shows a level-less hydro alert with the green icon", () => {
+    const card = createCard("alerts", { name: "Alerty", type: "alerts" }, 0);
+    document.getElementById("weather-grid").appendChild(card);
+    alerts.push({ value: "susza hydrologiczna", level: null, valid_to: "2099-01-01T00:00:00Z" });
+    updateAlertVisibility();
+
+    const img = document.getElementById("alerts-icon-img");
+    expect(img.src).toContain(ALERT_GREEN_ICON);
+    expect(img.alt).toBe("green");
+    expect(document.getElementById("alerts-value").textContent).toBe("susza hydrologiczna");
+  });
+
   it("updateAlertVisibility drops alerts without a valid expiry", () => {
     alerts.push({ value: "undated", level: "red", valid_to: "not a date" });
     updateAlertVisibility();
@@ -1087,7 +1144,7 @@ describe("alert", () => {
       timestamp: "ts1",
       valid_to: "2099-01-01T00:00:00Z",
     });
-    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
+    expect(Notification).toHaveBeenCalledWith("Alert", {
       body: expect.stringMatching(/Pomarańczowy alert: burze\nWażny do: 1 stycznia, \d{2}:\d{2}/),
       tag: "ts1",
     });
@@ -1109,16 +1166,29 @@ describe("alert", () => {
     vi.useRealTimers();
   });
 
-  it("sendAlertNotification uses Zielony label for null level", () => {
+  it("sendAlertNotification uses no level label for null level", () => {
     sendAlertNotification({
       value: "brak zagrożeń",
       level: null,
       timestamp: "ts3",
       valid_to: "2099-01-01T00:00:00Z",
     });
-    expect(Notification).toHaveBeenCalledWith("Alert meteorologiczny", {
-      body: expect.stringMatching(/Zielony alert: brak zagrożeń/),
+    expect(Notification).toHaveBeenCalledWith("Alert", {
+      body: expect.stringMatching(/^brak zagrożeń\nWażny do: /),
       tag: "ts3",
+    });
+  });
+
+  it("sendAlertNotification uses the raw level as label for an unknown level", () => {
+    sendAlertNotification({
+      value: "burze",
+      level: "purple",
+      timestamp: "ts4",
+      valid_to: "2099-01-01T00:00:00Z",
+    });
+    expect(Notification).toHaveBeenCalledWith("Alert", {
+      body: expect.stringMatching(/^purple alert: burze\n/),
+      tag: "ts4",
     });
   });
 
@@ -1145,7 +1215,7 @@ describe("alert", () => {
       timestamp: "notif1",
     });
     expect(Notification).toHaveBeenCalledWith(
-      "Alert meteorologiczny",
+      "Alert",
       expect.objectContaining({ body: expect.stringContaining("test") }),
     );
   });

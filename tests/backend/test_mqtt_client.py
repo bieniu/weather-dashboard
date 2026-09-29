@@ -254,6 +254,30 @@ ALERT_VALID_TO_DB = "2026-06-23 18:00:00.000000"
             },
         ),
         (
+            "weather-dashboard/alerts",
+            {
+                "value": "susza hydrologiczna",
+                "valid_to": "9999-12-31T23:59:59+00:00",
+                "level": None,
+            },
+            (
+                "alerts",
+                None,
+                "",
+                "susza hydrologiczna",
+                None,
+                None,
+                "2026-06-25 11:59:00.000000",
+            ),
+            {
+                "parameter": "alerts",
+                "value": "susza hydrologiczna",
+                "valid_to": "2026-06-25T11:59:00+00:00",
+                "level": None,
+                "timestamp": NOW_ISO,
+            },
+        ),
+        (
             "weather-dashboard/sun",
             {"value": "above_horizon"},
             ("sun", None, "", "above_horizon", None, None, None),

@@ -1,11 +1,13 @@
-// Meteorological alerts: the full-width alert card, expiry and notifications.
+// Meteorological and hydrological warnings (one MQTT topic): the full-width
+// alert card showing the newest active alert, expiry and notifications.
 import { getJson } from "./api.js";
 import { TIME_FORMAT, formatUpdated } from "./format.js";
 
 const ALERT_CHECK_MS = 30000;
 const DATE_FORMAT = new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long" });
 
-// A null level means "no warnings" (green); unknown levels fall back to yellow.
+// A null level (no warnings, or a level-less hydro warning) shows green;
+// unknown levels fall back to yellow.
 export const ALERT_ICONS = {
   yellow: "weather_icons/alert-yellow.svg",
   orange: "weather_icons/alert-orange.svg",
@@ -13,7 +15,6 @@ export const ALERT_ICONS = {
 };
 export const ALERT_GREEN_ICON = "weather_icons/alert-green.svg";
 const ALERT_LABELS = { yellow: "Żółty", orange: "Pomarańczowy", red: "Czerwony" };
-const ALERT_GREEN_LABEL = "Zielony";
 
 // Active alerts, newest first.
 export const alerts = [];
@@ -47,7 +48,7 @@ export function hideAlertCard() {
   if (card) card.style.display = "none";
 }
 
-/** Drops expired (or undated) alerts, then shows the first one left or hides the card. */
+/** Drops expired (or undated) alerts, then shows the newest valid one or hides the card. */
 export function updateAlertVisibility() {
   const now = new Date();
   for (let i = alerts.length - 1; i >= 0; i--) {
@@ -78,13 +79,16 @@ function isToday(date) {
 
 export function sendAlertNotification(alert) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const levelLabel =
-    alert.level == null ? ALERT_GREEN_LABEL : ALERT_LABELS[alert.level] || alert.level;
   const validTo = new Date(alert.valid_to);
   const time = TIME_FORMAT.format(validTo);
   const validToText = isToday(validTo) ? time : `${DATE_FORMAT.format(validTo)}, ${time}`;
-  new Notification("Alert meteorologiczny", {
-    body: `${levelLabel} alert: ${alert.value}\nWażny do: ${validToText}`,
+  // A null level may also mean "level unknown" (hydro warnings), so no label.
+  const text =
+    alert.level == null
+      ? alert.value
+      : `${ALERT_LABELS[alert.level] || alert.level} alert: ${alert.value}`;
+  new Notification("Alert", {
+    body: `${text}\nWażny do: ${validToText}`,
     tag: alert.timestamp,
   });
 }
