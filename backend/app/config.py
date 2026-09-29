@@ -68,7 +68,8 @@ class Settings(BaseSettings):
     umami_host: str | None = None
     umami_id: str | None = None
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
-    topic_prefix: str = _yaml_config["topic_prefix"]
+    # MQTT topic prefix: topics are published as ``{mqtt_base_topic}/{sensor_key}``.
+    mqtt_base_topic: str = "weather-dashboard"
     sensors: dict[str, SensorConfig] = {
         k: SensorConfig(**v) for k, v in _yaml_config["sensors"].items()
     }

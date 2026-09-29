@@ -1,7 +1,7 @@
 // Bumped by scripts/set_version.sh together with the ?v= cache-bust in
 // index.html, so every release installs a fresh cache and the activate step
 // drops the previous one. Never edit the VERSION line by hand.
-const VERSION = "163";
+const VERSION = "170";
 const CACHE = `weather-dashboard-v${VERSION}`;
 
 const WEATHER_ICONS = [
