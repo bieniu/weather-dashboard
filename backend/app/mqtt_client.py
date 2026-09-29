@@ -211,9 +211,21 @@ def _parse_alerts(
     else:
         valid_to = valid_to.astimezone(UTC)
     max_valid = now + timedelta(hours=MAX_ALERT_VALID_HOURS)
-    if valid_to <= now or valid_to > max_valid:
+    if valid_to <= now:
         msg = f"valid_to out of range: {valid_to}"
         raise ValueError(msg)
+    # IMGW hydro warnings send 9999-12-31T23:59:59+00:00 as an open-ended
+    # sentinel meaning "no end date"; treat any valid_to beyond the max as
+    # that sentinel and clamp it to just inside the range.
+    if valid_to > max_valid:
+        original_valid_to = valid_to
+        valid_to = max_valid - timedelta(minutes=1)
+        logger.info(
+            "Alert %s valid_to %s is open-ended; clamped to %s",
+            parameter,
+            original_valid_to,
+            valid_to,
+        )
     reading = WeatherReading(
         parameter=parameter,
         value_str=value,
