@@ -1,8 +1,6 @@
 # `icon:` values are Material Symbols ligatures (mdi: prefix is stripped). Every
 # icon used here must also be in the `icon_names=` subset in frontend/index.html
 # (tests/frontend/icons.test.js enforces it).
-topic_prefix: weather-dashboard
-
 sensors:
   condition:
     type: condition

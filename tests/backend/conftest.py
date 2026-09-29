@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 os.environ.setdefault("MQTT_BROKER", "localhost")
 os.environ.setdefault("MQTT_USER", "test")
 os.environ.setdefault("MQTT_PASSWORD", "test")
+os.environ.setdefault("MQTT_BASE_TOPIC", "weather-dashboard")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite://")
 
 # Ensure CWD is the backend/ directory so that app.main resolves ../frontend

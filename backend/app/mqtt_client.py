@@ -92,10 +92,10 @@ def _finite_float(value: str | float) -> float:
 
 
 TOPIC_PARAMETER_MAP: dict[str, str] = {
-    f"{settings.topic_prefix}/{sensor}": sensor for sensor in settings.sensors
+    f"{settings.mqtt_base_topic}/{sensor}": sensor for sensor in settings.sensors
 }
 
-SUN_TOPIC = f"{settings.topic_prefix}/sun"
+SUN_TOPIC = f"{settings.mqtt_base_topic}/sun"
 
 
 class WebSocketManager:
@@ -344,7 +344,7 @@ async def mqtt_listener() -> None:
                 username=settings.mqtt_user,
                 password=settings.mqtt_password,
             ) as client:
-                await client.subscribe(f"{settings.topic_prefix}/#")
+                await client.subscribe(f"{settings.mqtt_base_topic}/#")
                 logger.info(
                     "Connected to %s:%s",
                     settings.mqtt_broker,

@@ -107,11 +107,21 @@ def test_settings_log_level_rejects_unknown_name() -> None:
         Settings(_env_file=None, mqtt_broker="b", mqtt_user="u", log_level="loud")
 
 
-def test_settings_topic_prefix() -> None:
-    """Settings reads topic_prefix from config.yaml."""
-    from app.config import settings  # ty: ignore[unresolved-import]
+def test_settings_mqtt_base_topic_default() -> None:
+    """Without MQTT_BASE_TOPIC set, the default keeps CI and no-.env runs working."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
 
-    assert settings.topic_prefix == "weather-dashboard"
+    settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u")
+    assert settings.mqtt_base_topic == "weather-dashboard"
+
+
+def test_settings_mqtt_base_topic_env_override(monkeypatch) -> None:
+    """MQTT_BASE_TOPIC overrides the default topic prefix."""
+    from app.config import Settings  # ty: ignore[unresolved-import]
+
+    monkeypatch.setenv("MQTT_BASE_TOPIC", "custom-topic")
+    settings = Settings(_env_file=None, mqtt_broker="b", mqtt_user="u")
+    assert settings.mqtt_base_topic == "custom-topic"
 
 
 def test_settings_allowed_origins_defaults() -> None:

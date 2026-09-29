@@ -27,6 +27,7 @@ README.md          Minimal docs — icon source reference only
 ```bash
 uv sync --frozen   # run from root (requires uv installed)
 # Requires .env in project root with MQTT_BROKER, MQTT_USER, MQTT_PASSWORD
+# (optional: MQTT_BASE_TOPIC, default weather-dashboard)
 uvicorn app.main:app --host 0.0.0.0 --port 8332   # run from backend/
 # Or from root:
 docker compose up
@@ -37,7 +38,7 @@ docker compose up
 - Backend mounts `/api/weather/*` router, then serves `../frontend/` as static files at `/`
 - PWA: `frontend/service-worker.js` is registered from `app.js` (inline scripts are blocked by CSP). Its `VERSION` constant names the cache and is bumped by `scripts/set_version.sh`; the precache list must only contain files that exist (a single 404 aborts the install), which `tests/frontend/service-worker.test.js` checks. Every ES module imported by `app.js` must be listed in `APP_MODULES` (precached under its plain path); the same test fails if one is missing.
 - Chart.js and `chartjs-adapter-date-fns` are `dependencies` in `package.json` and their browser bundles live in `frontend/vendor/` (same-origin, CSP `script-src 'self'`). After a version bump run `npm run vendor`; `npm run vendor:check` (CI + pre-commit) fails while the copies are stale.
-- MQTT topic pattern: `{topic_prefix}/{sensor_key}` (prefix defaults to `weather-dashboard` in config.yaml)
+- MQTT topic pattern: `{mqtt_base_topic}/{sensor_key}` (base topic from `Settings.mqtt_base_topic`, env var `MQTT_BASE_TOPIC`, default `weather-dashboard`)
 - WebSocket at `/api/weather/ws` pushes live readings (a browser `Origin` outside `settings.allowed_origins`, or more than `MAX_WS_CONNECTIONS` open handlers / `MAX_WS_CONNECTIONS_PER_IP` per client IP, is refused before `accept()`, which the browser sees as HTTP 403; slow clients are closed after `WS_SEND_TIMEOUT_SECONDS`); REST at `/api/weather/sensors`, `/api/weather/current` (single query; the frontend uses it for card values at startup and after a reconnect), and `/api/weather/history/{parameter}?hours=N` (charts only; default `DEFAULT_HISTORY_HOURS` = 24, mirrored by `HISTORY_HOURS` in `frontend/api.js`)
 - Frontend startup: the WebSocket opens before the initial requests (`loadHistory` merges live points that arrive meanwhile); reconnects use 5 s → 60 s backoff with jitter, `visibilitychange`/`online` reconnect immediately, and every reconnect backfills `/current`, chart histories, alerts and the forecast
 - MQTT payload limits: `MAX_PAYLOAD_BYTES` (64 kB), non-object JSON and NaN/inf are rejected, strings are cut to their column width, forecasts keep the first `MAX_FORECAST_ITEMS`
@@ -52,7 +53,7 @@ docker compose up
 - Type checking: `ty check backend` (run from root). configured in `pyproject.toml` (root).
 - Both ruff and ty are dev dependencies — install via `uv sync --frozen` from root.
 - Pre-commit wrapper: `prek` (reads `.pre-commit-config.yaml`). Run `prek run --all-files` to run all hooks.
-- `.env` is gitignored; example vars in docker-compose.yml: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`
+- `.env` is gitignored; example vars in docker-compose.yml: `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`, `MQTT_BASE_TOPIC`
 - Middleware is pure ASGI (no `BaseHTTPMiddleware`): `RateLimitMiddleware` (`ratelimit.py`) resolves the client IP with `client_ip(scope)` (`Cf-Connecting-IP`, else socket peer) into `scope["state"]["real_ip"]` and limits `/api/*`; `SecurityHeadersMiddleware` (`main.py`, outermost) adds CSP (`script-src`/`connect-src 'self'` + Umami host, `base-uri`, `form-action`, `object-src 'none'`, `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, and `Cache-Control`: `no-cache` for `/`, `/index.html`, `/service-worker.js` and every other static path without `?v=` (icons, ES modules), `no-store` for `/api/*`, `immutable` for `?v=` assets on 200/304 only; a Cache-Control already set by the app is kept.
 - Material Symbols are loaded as a subset (`icon_names=` in `index.html`, alphabetical); any new ligature in `index.html`, `frontend/*.js` or a `config.yaml` `icon:` must be added there (`tests/frontend/icons.test.js` checks).
 - Theme: CSS renders the OS preference before JS runs (no flash); an explicit toggle is stored in `localStorage` under `theme`.
@@ -110,7 +111,7 @@ Failing any of these must be fixed before the implementation is complete.
 
 | File | What it covers |
 |---|---|
-| `test_config.py` | `SensorConfig` (incl. sensor type validation), `Settings` (sensors, prefix, allowed origins, log level, `key_for_type`) |
+| `test_config.py` | `SensorConfig` (incl. sensor type validation), `Settings` (sensors, base topic, allowed origins, log level, `key_for_type`) |
 | `test_database.py` | Table creation, column + index migrations, SQLite pragmas, cleanup query plan, `get_db` |
 | `test_models.py` | ORM creation, default timestamp, declared indexes, `UTCDateTime` round-trip |
 | `test_schemas.py` | `WeatherReadingOut` serialization (ISO 8601 `+00:00`), nullables |

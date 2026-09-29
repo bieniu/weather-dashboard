@@ -30,6 +30,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     MQTT_BROKER="" \
     MQTT_PORT="1883" \
     MQTT_USER="" \
+    MQTT_BASE_TOPIC="weather-dashboard" \
     DOMAIN="localhost" \
     PORT="8332" \
     SCHEME="http" \
