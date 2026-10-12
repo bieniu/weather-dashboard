@@ -7,7 +7,7 @@ repos:
           - --fix
       - id: ruff-format
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.84
+    rev: v0.0.85
     hooks:
       - id: ty
   - repo: builtin
@@ -32,14 +32,14 @@ repos:
           - --indent=4
           - --autofix
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v10.11.0
+    rev: v10.12.0
     hooks:
       - id: eslint
         args: [--config, eslint.config.js]
         files: \.(js|mjs)$
         exclude: ^frontend/vendor/
         additional_dependencies:
-          - eslint@10.11.0
+          - eslint@10.12.0
           - '@eslint/js@10.0.1'
           - globals@17.13.0
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -50,7 +50,7 @@ repos:
         additional_dependencies:
           - prettier@3.9.9
   - repo: https://github.com/thibaudcolas/pre-commit-stylelint
-    rev: v17.15.0
+    rev: v17.16.0
     hooks:
       - id: stylelint
         files: \.(css)$
