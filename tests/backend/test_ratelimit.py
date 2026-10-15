@@ -113,6 +113,44 @@ async def test_different_ips_have_separate_windows(limiter) -> None:
     assert await hit("10.0.0.2") == 200
 
 
+@pytest.mark.parametrize(
+    ("ip", "key"),
+    [
+        ("2001:db8:1:1::1", "2001:db8:1:1::/64"),
+        ("2001:db8:1:1:ffff::2", "2001:db8:1:1::/64"),
+        ("2001:db8:1:2::1", "2001:db8:1:2::/64"),
+        ("198.51.100.1", "198.51.100.1"),
+        ("::ffff:198.51.100.1", "198.51.100.1"),
+        ("[2001:db8::1]", "2001:db8::/64"),
+        ("2001:DB8:0000::0001", "2001:db8::/64"),
+        ("fe80::1%eth0", "fe80::/64"),
+        ("not-an-ip", "not-an-ip"),
+        ("unknown", "unknown"),
+    ],
+)
+def test_client_key_groups_ipv6_by_64(ip, key) -> None:
+    """IPv4 keys are the address, IPv6 keys the /64; unparsable values pass as is."""
+    from app.ratelimit import client_key  # ty: ignore[unresolved-import]
+
+    scope = {"type": "http", "headers": [(b"cf-connecting-ip", ip.encode())]}
+    assert client_key(scope) == key
+
+
+async def test_ipv6_addresses_in_one_64_share_a_window(limiter) -> None:
+    """Rotating addresses within one IPv6 /64 does not escape the limit."""
+    from app.ratelimit import RATE_LIMIT  # ty: ignore[unresolved-import]
+
+    middleware, _client, hit, seen = limiter
+    for _ in range(RATE_LIMIT):
+        assert await hit("2001:db8:1:1::1") == 200
+
+    assert await hit("2001:db8:1:1::2") == 429
+    assert await hit("2001:db8:1:2::1") == 200
+    assert seen[0]["state"]["real_ip"] == "2001:db8:1:1::1"  # raw address kept
+    assert seen[-1]["state"]["real_ip"] == "2001:db8:1:2::1"
+    assert list(middleware._windows) == ["2001:db8:1:1::/64", "2001:db8:1:2::/64"]
+
+
 async def test_cleanup_removes_expired_entries(limiter) -> None:
     """Every CLEANUP_EVERY counted requests, idle IP entries are dropped."""
     from app.ratelimit import CLEANUP_EVERY  # ty: ignore[unresolved-import]

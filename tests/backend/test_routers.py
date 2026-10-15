@@ -315,6 +315,29 @@ async def test_websocket_rejects_when_per_ip_cap_reached(monkeypatch) -> None:
     assert weather._open_ws_by_ip == {"127.0.0.1": 1}  # released on disconnect
 
 
+async def test_websocket_per_ip_cap_covers_the_ipv6_64(monkeypatch) -> None:
+    """IPv6 clients are capped per /64, so rotating addresses gains no slots."""
+    from app.routers import weather  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(weather, "MAX_WS_CONNECTIONS_PER_IP", 1)
+
+    def scope_from(ip: str) -> dict:
+        scope = _websocket_scope()
+        scope["headers"] = [(b"cf-connecting-ip", ip.encode())]
+        return scope
+
+    first = await _handshake(scope_from("2001:db8::1"))
+    assert first[0]["type"] == "websocket.accept"
+
+    weather._open_ws_by_ip["2001:db8::/64"] = 1  # a slot held by that /64
+    refused = await _handshake(scope_from("2001:db8::2"))
+    assert refused == [{"type": "websocket.close", "code": 1013, "reason": ""}]
+
+    other = await _handshake(scope_from("2001:db9::1"))
+    assert other[0]["type"] == "websocket.accept"
+    assert weather._open_ws_by_ip == {"2001:db8::/64": 1}
+
+
 async def test_websocket_endpoint_unregisters_on_unexpected_error() -> None:
     """A failure other than WebSocketDisconnect still removes the connection."""
     from app.main import app  # ty: ignore[unresolved-import]
