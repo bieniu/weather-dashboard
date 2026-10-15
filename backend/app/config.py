@@ -16,6 +16,10 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 MAX_HISTORY_HOURS = 24 * 30
 # Default window for charts; the frontend's HISTORY_HOURS mirrors this value.
 DEFAULT_HISTORY_HOURS = 24
+# Row cap for one /history response (bounds its size: a 30-day window holds
+# ~11.5k rows). ~5x the frontend's 200-sample LTTB decimation, so charts look
+# the same.
+MAX_HISTORY_POINTS = 1000
 
 
 def _load_config_yaml() -> dict:
