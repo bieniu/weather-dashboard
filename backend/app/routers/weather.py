@@ -13,7 +13,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from sqlalchemy import desc, select, union_all
+from sqlalchemy import desc, func, or_, select, union_all
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import (
 from app.config import (
     DEFAULT_HISTORY_HOURS,
     MAX_HISTORY_HOURS,
+    MAX_HISTORY_POINTS,
     SensorConfig,
     SensorType,
     settings,
@@ -102,19 +103,47 @@ async def get_history(
     db: Annotated[AsyncSession, Depends(get_db)],
     hours: Annotated[int, Query(ge=1, le=MAX_HISTORY_HOURS)] = DEFAULT_HISTORY_HOURS,
 ) -> Sequence[WeatherReading]:
-    """Return reading history for the last `hours` hours (default 24, max 720)."""
+    """Return reading history for the last `hours` hours (default 24, max 720).
+
+    Only numeric sensors have a history (text/forecast rows can be 64 kB each).
+    At most ``MAX_HISTORY_POINTS`` real rows are returned: a larger window is
+    sampled at an even stride over its rows, always keeping the first and the
+    last reading. One statement, so the count and the sample share a snapshot.
+    """
     if parameter not in settings.sensors:
         raise HTTPException(status_code=400, detail="Invalid parameter")
+    if settings.sensors[parameter].type is not SensorType.NUMERIC:
+        raise HTTPException(
+            status_code=400, detail="History is only available for numeric sensors"
+        )
 
     since = datetime.now(UTC) - timedelta(hours=hours)
-    stmt = (
-        select(WeatherReading)
+    order = (WeatherReading.timestamp, WeatherReading.id)
+    numbered = (
+        select(
+            WeatherReading.id,
+            func.row_number().over(order_by=order).label("rn"),
+            func.count().over().label("total"),
+        )
         .where(
             WeatherReading.parameter == parameter,
             WeatherReading.timestamp >= since,
         )
-        .order_by(WeatherReading.timestamp)
+        .subquery()
     )
+    # Integer ceil((total - 1) / (MAX - 1)); `//` renders as integer `/` on SQLite.
+    # It fits at most MAX - 1 steps before the last row, so rows 1, 1 + stride,
+    # ... plus the forced last row stay within the cap.
+    stride = (numbered.c.total + (MAX_HISTORY_POINTS - 3)) // (MAX_HISTORY_POINTS - 1)
+    # For total <= 1 the stride is 0 and `% 0` is NULL, but the first arm holds.
+    sampled = select(numbered.c.id).where(
+        or_(
+            numbered.c.total <= MAX_HISTORY_POINTS,
+            (numbered.c.rn - 1) % stride == 0,
+            numbered.c.rn == numbered.c.total,
+        )
+    )
+    stmt = select(WeatherReading).where(WeatherReading.id.in_(sampled)).order_by(*order)
     return (await db.execute(stmt)).scalars().all()
 
 

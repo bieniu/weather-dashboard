@@ -129,6 +129,62 @@ async def test_get_history(async_client, db_session) -> None:
 
 
 @pytest.mark.parametrize(
+    ("count", "stride", "expected_len"),
+    [(1001, 2, 501), (1999, 2, 1000), (2001, 3, 668)],
+)
+@freeze_time("2026-06-23 12:00:00", tz_offset=0)
+async def test_get_history_caps_rows_keeping_first_and_last(
+    async_client, db_session, count, stride, expected_len
+) -> None:
+    """GET /history samples a large window down to MAX_HISTORY_POINTS real rows."""
+    import datetime as dt
+
+    from app.models import WeatherReading  # ty: ignore[unresolved-import]
+
+    now = datetime.now(UTC)
+    rows = [
+        WeatherReading(
+            parameter="temperature",
+            value=float(i),
+            unit="°C",
+            timestamp=now - dt.timedelta(minutes=count - 1 - i),
+        )
+        for i in range(count)
+    ]
+    db_session.add_all(rows)
+    await db_session.commit()
+    inserted = {row.id: row.value for row in rows}
+    expected = [float(i) for i in range(0, count, stride)]
+    if expected[-1] != float(count - 1):
+        expected.append(float(count - 1))
+
+    resp = await async_client.get("/api/weather/history/temperature?hours=720")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == expected_len
+    assert [item["value"] for item in data] == expected
+    assert data[0]["timestamp"] == rows[0].timestamp.isoformat()
+    assert data[-1]["timestamp"] == rows[-1].timestamp.isoformat()
+    assert all(inserted[item["id"]] == item["value"] for item in data)
+
+    # A window under the cap is returned complete.
+    resp = await async_client.get("/api/weather/history/temperature?hours=1")
+    assert [item["value"] for item in resp.json()] == [
+        float(i) for i in range(count - 61, count)
+    ]
+
+
+@pytest.mark.parametrize(
+    "parameter", ["condition", "air_quality", "alerts", "forecast"]
+)
+async def test_get_history_rejects_non_numeric_sensor(async_client, parameter) -> None:
+    """GET /history is refused for text/forecast sensors (large value_str rows)."""
+    resp = await async_client.get(f"/api/weather/history/{parameter}?hours=720")
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "History is only available for numeric sensors"
+
+
+@pytest.mark.parametrize(
     ("hours", "status"),
     [(0, 422), (-1, 422), (721, 422), (10**11, 422), (1, 200), (720, 200)],
 )
