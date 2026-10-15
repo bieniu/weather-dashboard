@@ -715,6 +715,59 @@ describe("connectWebSocket", () => {
     expect(fetch.mock.calls.map((c) => c[0])).toContain(`${API_BASE}/current`);
   });
 
+  const currentCalls = () => fetch.mock.calls.filter((c) => c[0] === `${API_BASE}/current`).length;
+
+  it("polls /current every 60 s while sockets close without opening, with a single interval", () => {
+    connectWebSocket();
+    latest().onclose();
+    vi.advanceTimersByTime(59999);
+    expect(currentCalls()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(currentCalls()).toBe(1);
+
+    // Several refused reconnects must not stack intervals.
+    for (let i = 0; i < 3; i++) {
+      vi.advanceTimersByTime(60000);
+      latest().onclose();
+    }
+    expect(sockets.length).toBeGreaterThan(3);
+    const before = currentCalls();
+    vi.advanceTimersByTime(60000);
+    expect(currentCalls()).toBe(before + 1);
+  });
+
+  it("does not poll after a socket that opened was closed", () => {
+    connectWebSocket();
+    latest().onopen();
+    latest().onclose();
+    vi.advanceTimersByTime(4000); // before the first reconnect
+    expect(wsState.pollTimer).toBeNull();
+    expect(currentCalls()).toBe(0);
+  });
+
+  it("stops polling once a socket opens", async () => {
+    connectWebSocket();
+    latest().onclose();
+    vi.advanceTimersByTime(6000);
+    expect(wsState.pollTimer).not.toBeNull();
+
+    latest().onopen();
+    expect(wsState.pollTimer).toBeNull();
+    await vi.waitFor(() => expect(currentCalls()).toBe(1)); // the reconnect backfill
+    vi.advanceTimersByTime(120000);
+    expect(currentCalls()).toBe(1);
+  });
+
+  it("resetState clears the poll timer", () => {
+    connectWebSocket();
+    latest().onclose();
+    expect(wsState.pollTimer).not.toBeNull();
+    resetState();
+    expect(wsState.pollTimer).toBeNull();
+    vi.advanceTimersByTime(60000);
+    expect(currentCalls()).toBe(0);
+  });
+
   it("ignores close events from a socket that was already replaced", () => {
     connectWebSocket();
     const stale = latest();

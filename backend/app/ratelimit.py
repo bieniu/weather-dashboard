@@ -1,5 +1,6 @@
 """Client-IP resolution and sliding-window rate limiting per IP (pure ASGI)."""
 
+import ipaddress
 import time
 from collections import OrderedDict, deque
 from typing import TYPE_CHECKING
@@ -14,9 +15,9 @@ RATE_LIMIT = 100
 WINDOW_SECONDS = 60
 CLEANUP_EVERY = 100
 LIMITED_PATH_PREFIX = "/api/"
-# Upper bound on distinct client keys kept in memory. Only reachable if
-# Cf-Connecting-IP can be forged (i.e. the port is exposed past the tunnel);
-# then the least recently seen key is evicted instead of growing without limit.
+# Upper bound on distinct client keys kept in memory (many distinct IPv4
+# addresses or IPv6 /64s, or forged Cf-Connecting-IP values if the port is ever
+# exposed past the tunnel): the least recently seen key is evicted instead.
 MAX_TRACKED_IPS = 10_000
 
 
@@ -33,11 +34,36 @@ def client_ip(scope: Scope) -> str:
     return client[0] if client else "unknown"
 
 
+def _normalise_key(ip: str) -> str:
+    """Map an IP string to its limiter key: IPv4 address or IPv6 /64 network.
+
+    An IPv6 subscriber usually owns a whole /64 and can rotate addresses within
+    it at will, so per-address keys would void every per-client limit.
+    IPv4-mapped IPv6 addresses count as their IPv4 address; anything that does
+    not parse (e.g. ``"unknown"``) is used as is.
+    """
+    try:
+        address = ipaddress.ip_address(ip.strip("[]"))
+    except ValueError:
+        return ip
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return str(address.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return str(address)
+
+
+def client_key(scope: Scope) -> str:
+    """Return the per-client limit key: the IPv4 address or the IPv6 /64."""
+    return _normalise_key(client_ip(scope))
+
+
 class RateLimitMiddleware:
     """Resolve the client IP and apply a sliding-window limit to ``/api/*``.
 
-    The IP is stored as ``scope["state"]["real_ip"]`` (``request.state.real_ip``)
-    for every HTTP request; only paths under ``/api/`` are counted, so static
+    The raw IP is stored as ``scope["state"]["real_ip"]`` (``request.state.real_ip``)
+    for every HTTP request; windows are keyed per IPv4 address or IPv6 /64
+    (``client_key``). Only paths under ``/api/`` are counted, so static
     assets pass through. Non-HTTP scopes (WebSocket, lifespan) pass through
     untouched. Returns 429 Too Many Requests when the limit is exceeded.
     """
@@ -57,7 +83,8 @@ class RateLimitMiddleware:
 
         ip = client_ip(scope)
         scope.setdefault("state", {})["real_ip"] = ip
-        if scope["path"].startswith(LIMITED_PATH_PREFIX) and not self._allow(ip):
+        limited = scope["path"].startswith(LIMITED_PATH_PREFIX)
+        if limited and not self._allow(_normalise_key(ip)):
             response = JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests — try again later."},
@@ -68,7 +95,7 @@ class RateLimitMiddleware:
         await self.app(scope, receive, send)
 
     def _allow(self, ip: str) -> bool:
-        """Record a hit for ``ip``; ``False`` if its window is already full."""
+        """Record a hit for client key ``ip``; ``False`` if its window is full."""
         now = time.monotonic()
         window = self._windows.get(ip)
         if window is None:

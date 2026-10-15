@@ -33,19 +33,20 @@ from app.config import (
 from app.database import get_db
 from app.models import WeatherReading
 from app.mqtt_client import manager
-from app.ratelimit import client_ip
+from app.ratelimit import client_key
 from app.schemas import AnalyticsOut, ForecastOut, SunOut, WeatherReadingOut
 
 router = APIRouter(prefix="/api/weather", tags=["weather"])
 
-MAX_WS_CONNECTIONS = 100
+MAX_WS_CONNECTIONS = 500  # bounds memory; the per-client cap does the limiting
 MAX_WS_CONNECTIONS_PER_IP = 5
 WS_CLOSE_POLICY_VIOLATION = 1008
 WS_CLOSE_TRY_AGAIN_LATER = 1013
 
-# Open WebSocket handlers per client IP. Counted synchronously *before* accept()
-# (no await in between), so concurrent handshakes cannot overshoot the caps, and
-# a client the broadcaster already dropped still counts until its handler ends.
+# Open WebSocket handlers per client key (IPv4 address or IPv6 /64, see
+# client_key). Counted synchronously *before* accept() (no await in between), so
+# concurrent handshakes cannot overshoot the caps, and a client the broadcaster
+# already dropped still counts until its handler ends.
 _open_ws_by_ip: Counter[str] = Counter()
 
 
@@ -214,14 +215,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     cross-site connection attempt and is refused. Non-browser clients without
     the header are accepted (the data is public and read-only). A close before
     ``accept()`` reaches the browser as a failed handshake (HTTP 403); the ASGI
-    close codes only distinguish the reasons in logs and tests.
+    close codes only distinguish the reasons in logs and tests. At most
+    ``MAX_WS_CONNECTIONS_PER_IP`` handlers run per client IPv4 address or IPv6
+    /64 (``client_key``), and ``MAX_WS_CONNECTIONS`` in total.
     """
     origin = websocket.headers.get("origin")
     if origin is not None and origin not in settings.allowed_origins:
         await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
         return
 
-    key = client_ip(websocket.scope)
+    key = client_key(websocket.scope)
     if (
         _open_ws_by_ip.total() >= MAX_WS_CONNECTIONS
         or _open_ws_by_ip[key] >= MAX_WS_CONNECTIONS_PER_IP

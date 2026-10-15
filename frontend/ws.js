@@ -8,6 +8,7 @@ const WS_PATH = "/api/weather/ws";
 const WS_RECONNECT_BASE_MS = 5000;
 const WS_RECONNECT_MAX_MS = 60000;
 const WS_RECONNECT_JITTER = 0.2;
+const WS_POLL_INTERVAL_MS = 60000;
 const WS_STATE_CONNECTING = 0;
 const WS_STATE_OPEN = 1;
 
@@ -16,6 +17,7 @@ export const wsState = {
   reconnectTimer: null,
   reconnectAttempt: 0,
   attempted: false,
+  pollTimer: null,
 };
 
 function wsUrl() {
@@ -84,7 +86,12 @@ export function connectWebSocket() {
   const socket = new WebSocket(wsUrl());
   wsState.socket = socket;
 
+  let opened = false;
+
   socket.onopen = () => {
+    opened = true;
+    clearInterval(wsState.pollTimer);
+    wsState.pollTimer = null;
     setConnectionStatus(true);
     wsState.reconnectAttempt = 0;
     if (!isFirstAttempt) backfillAfterReconnect();
@@ -101,6 +108,12 @@ export function connectWebSocket() {
   socket.onclose = () => {
     if (socket !== wsState.socket) return; // superseded by reconnectNow(); ignore
     setConnectionStatus(false);
+    // A socket that never opened (handshake refused: connection cap reached,
+    // or the server is down) leaves the cards stale, so poll /current until a
+    // socket opens again. Charts, alerts and the forecast wait for the backfill.
+    if (!opened && !wsState.pollTimer) {
+      wsState.pollTimer = setInterval(() => loadCurrent(), WS_POLL_INTERVAL_MS);
+    }
     scheduleReconnect();
   };
 
@@ -112,10 +125,12 @@ export function connectWebSocket() {
 
 export function resetWebSocket() {
   clearTimeout(wsState.reconnectTimer);
+  clearInterval(wsState.pollTimer);
   Object.assign(wsState, {
     socket: null,
     reconnectTimer: null,
     reconnectAttempt: 0,
     attempted: false,
+    pollTimer: null,
   });
 }
