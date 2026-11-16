@@ -48,7 +48,7 @@ repos:
       - id: prettier
         files: ^(frontend|tests/frontend)/.*\.(js|css|html)$
         additional_dependencies:
-          - prettier@3.9.10
+          - prettier@3.10.1
   - repo: https://github.com/thibaudcolas/pre-commit-stylelint
     rev: v18.0.0
     hooks:
