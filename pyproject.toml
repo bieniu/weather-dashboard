@@ -16,9 +16,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "prek==0.5.10",
-  "ruff==0.17.5",
-  "ty==0.0.102",
+  "prek==0.5.11",
+  "ruff==0.17.6",
+  "ty==0.0.107",
 ]
 
 test = [
